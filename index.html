@@ -8,69 +8,75 @@
   <!-- ユーティリティCSS (Tailwind CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- 分割CSSの読み込み (css/ フォルダ内を参照) -->
+  <!-- 分割CSSの読み込み -->
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/components.css">
 </head>
 
-<body class="min-h-screen flex flex-col items-center p-3 pb-12 bg-[#0b1329] text-slate-100 font-sans select-none">
+<body class="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col items-center p-2 sm:p-3 bg-[#0b1329] text-slate-100 font-sans select-none">
 
-  <!-- 1. アプリヘッダー & ナビゲーション -->
-  <header class="w-full max-w-lg mb-2 flex items-center justify-between border-b border-slate-800 pb-2">
+  <!-- 1. アプリヘッダー & ナビゲーション (PCでは幅広に展開) -->
+  <header class="w-full max-w-lg lg:max-w-6xl mb-2 flex items-center justify-between border-b border-slate-800 pb-2">
     <div>
       <div class="flex items-center gap-1.5">
         <span class="text-xl">⚾️</span>
-        <h1 class="text-base font-bold text-emerald-400">学童野球 1球速報</h1>
+        <h1 class="text-base sm:text-lg font-bold text-emerald-400">学童野球 1球速報</h1>
         <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700">v1.0</span>
       </div>
-      <p class="text-[10px] text-slate-400">gakudo-baseball-score</p>
+      <p class="text-[10px] text-slate-400 hidden sm:block">gakudo-baseball-score</p>
     </div>
     <div class="flex items-center gap-1.5">
-      <button id="btn-open-roster" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold px-2 py-1.5 rounded-lg border border-sky-900/50 flex items-center gap-1 shadow">
+      <button id="btn-open-roster" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-sky-900/50 flex items-center gap-1 shadow">
         📋 オーダー
       </button>
-      <button id="btn-export-csv" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold px-2 py-1.5 rounded-lg border border-emerald-900/50 flex items-center gap-1 shadow" title="公式スコアCSVを保存">
+      <button id="btn-export-csv" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-emerald-900/50 flex items-center gap-1 shadow" title="公式スコアCSVを保存">
         📤 CSV
       </button>
-      <button id="btn-undo" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow">
-        ↺ 1球取消
+      <button id="btn-undo" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow">
+        ↺ 1球取消 <span class="hidden lg:inline text-[10px] opacity-80">(Ctrl+Z)</span>
       </button>
     </div>
   </header>
 
-  <!-- 2. スロット: スコアボード & 球数・タイマー管理 (scoreboard.js が描画) -->
-  <section id="scoreboard-slot" class="w-full max-w-lg mb-3">
-    <!-- scoreboard.js によって自動レンダリングされます -->
-  </section>
+  <!-- 2. メインコンテンツ: PCでは左右2カラム、スマホでは縦1列 -->
+  <div class="w-full max-w-lg lg:max-w-6xl flex-1 flex flex-col lg:flex-row gap-2.5 lg:gap-4 lg:items-start overflow-y-auto lg:overflow-visible">
+    
+    <!-- 【左カラム】スコアボード・走者BSO・直近投球ログ -->
+    <div class="w-full lg:w-[48%] flex flex-col gap-2">
+      <!-- スコアボード & 球数・タイマー管理 -->
+      <section id="scoreboard-slot" class="w-full">
+        <!-- scoreboard.js が描画 -->
+      </section>
 
-  <!-- 3. スロット: 走者ダイアモンド & BSOカウントランプ (runnerDiamond.js が描画) -->
-  <section id="diamond-slot" class="w-full max-w-lg mb-3">
-    <!-- runnerDiamond.js によって自動レンダリングされます -->
-  </section>
+      <!-- 走者ダイアモンド & BSOカウントランプ -->
+      <section id="diamond-slot" class="w-full">
+        <!-- runnerDiamond.js が描画 -->
+      </section>
 
-  <!-- 4. メイン操作エリア: 17分割コース盤面 & 投球判定 (zone.js が描画) -->
-  <main class="w-full max-w-lg space-y-3">
-    <section id="zone-slot">
-      <!-- zone.js によって17分割盤面と投球判定ボタンが描画されます -->
-    </section>
+      <!-- 直近投球ログスロット -->
+      <section id="log-slot" class="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 shadow text-xs flex-1">
+        <!-- runnerDiamond.js が更新 -->
+      </section>
+    </div>
 
-    <!-- 直近投球ログスロット (runnerDiamond.js が更新) -->
-    <section id="log-slot" class="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow text-xs">
-      <!-- 投球ログが描画されます -->
-    </section>
-  </main>
+    <!-- 【右カラム】17分割コース盤面 & 投球判定アクション（操作の主戦場） -->
+    <div class="w-full lg:w-[52%] flex flex-col">
+      <main class="w-full">
+        <section id="zone-slot">
+          <!-- zone.js が17分割盤面と判定ボタンを描画 -->
+        </section>
+      </main>
+    </div>
 
-  <!-- 5. モーダルスロット: 打球スプレー入力 (sprayModal.js が制御) -->
-  <div id="spray-modal-slot" class="hidden">
-    <!-- 打球詳細・Canvasモーダル -->
   </div>
 
-  <!-- 6. モーダルスロット: 団員名簿マスタ ＆ オーダー編成 (rosterView.js が制御) -->
-  <div id="roster-modal-slot" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 p-3 overflow-y-auto flex items-center justify-center">
-    <!-- rosterView.js によって描画されます -->
-  </div>
+  <!-- 3. モーダルスロット: 打球スプレー入力 (sprayModal.js が制御) -->
+  <div id="spray-modal-slot" class="hidden"></div>
 
-  <!-- 7. ES Modules エントリーポイント (司令塔) -->
+  <!-- 4. モーダルスロット: 団員名簿マスタ ＆ オーダー編成 (rosterView.js が制御) -->
+  <div id="roster-modal-slot" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 p-3 overflow-y-auto flex items-center justify-center"></div>
+
+  <!-- 5. ES Modules エントリーポイント -->
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
