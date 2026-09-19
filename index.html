@@ -1,4 +1,65 @@
-<!-- 直近投球ログスロット -->
-<section id="log-slot" class="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow text-xs">
-  <!-- 投球ログが描画されます -->
-</section>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>学童野球 1球速報 - gakudo-baseball-score</title>
+  
+  <!-- ユーティリティCSS (Tailwind CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 分割CSSの読み込み (css/ フォルダ内を参照) -->
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+
+<body class="min-h-screen flex flex-col items-center p-3 pb-12 bg-[#0b1329] text-slate-100 font-sans select-none">
+
+  <!-- 1. アプリヘッダー & ナビゲーション -->
+  <header class="w-full max-w-lg mb-2 flex items-center justify-between border-b border-slate-800 pb-2">
+    <div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-xl">⚾️</span>
+        <h1 class="text-base font-bold text-emerald-400">学童野球 1球速報</h1>
+        <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700">v1.0</span>
+      </div>
+      <p class="text-[10px] text-slate-400">gakudo-baseball-score</p>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <button id="btn-undo" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow">
+        ↺ 1球取消
+      </button>
+    </div>
+  </header>
+
+  <!-- 2. スロット: スコアボード & 球数・タイマー管理 (scoreboard.js が描画) -->
+  <section id="scoreboard-slot" class="w-full max-w-lg mb-3">
+    <!-- scoreboard.js によって自動レンダリングされます -->
+  </section>
+
+  <!-- 3. スロット: 走者ダイアモンド & BSOカウントランプ (runnerDiamond.js が描画) -->
+  <section id="diamond-slot" class="w-full max-w-lg mb-3">
+    <!-- runnerDiamond.js によって自動レンダリングされます -->
+  </section>
+
+  <!-- 4. メイン操作エリア: 17分割コース盤面 & 投球判定 (zone.js が描画) -->
+  <main class="w-full max-w-lg space-y-3">
+    <section id="zone-slot">
+      <!-- zone.js によって17分割盤面と投球判定ボタンが描画されます -->
+    </section>
+
+    <!-- 直近投球ログスロット (runnerDiamond.js が更新) -->
+    <section id="log-slot" class="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow text-xs">
+      <!-- 投球ログが描画されます -->
+    </section>
+  </main>
+
+  <!-- 5. モーダルスロット: 打球スプレー入力 (sprayModal.js が制御) -->
+  <div id="spray-modal-slot" class="hidden">
+    <!-- 打球詳細・Canvasモーダル -->
+  </div>
+
+  <!-- 6. ES Modules エントリーポイント (司令塔) -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
