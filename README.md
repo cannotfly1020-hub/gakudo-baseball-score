@@ -1,1 +1,0 @@
-# gakudo-baseball-score
