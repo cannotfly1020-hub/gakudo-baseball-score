@@ -37,11 +37,6 @@ export const ZONE_COURSES = {
 };
 
 export class ZoneComponent {
-  /**
-   * @param {HTMLElement} containerElement 描画対象の親要素 (#zone-slot)
-   * @param {GameState} gameState 試合状態管理インスタンス
-   * @param {Object} options コールバック群（打球モーダル起動など）
-   */
   constructor(containerElement, gameState, options = {}) {
     this.container = containerElement;
     this.gameState = gameState;
@@ -67,97 +62,97 @@ export class ZoneComponent {
   }
 
   /**
-   * DOM骨組みの生成
+   * DOM骨組みの生成（Tailwind クラスを直接指定して確実にコンパクト化）
    */
   render() {
     this.container.innerHTML = `
-      <div class="zone-container select-none">
+      <div class="zone-container w-full max-w-[360px] mx-auto bg-slate-900/95 border border-slate-800 rounded-xl p-2 shadow-2xl flex flex-col gap-1.5 select-none">
         
-        <!-- ヘッダー情報: 選択中コース表示 -->
-        <div class="flex items-center justify-between px-2 py-1 bg-slate-900/80 rounded-lg border border-slate-800 text-xs mb-1">
-          <span class="text-slate-400 font-bold">投球コース選択:</span>
-          <span id="selected-course-label" class="text-amber-400 font-extrabold text-sm tracking-wide">
+        <!-- ヘッダー: 選択中コース表示（超薄型） -->
+        <div class="flex items-center justify-between px-2.5 py-1 bg-slate-950 rounded-lg border border-slate-800/80 text-xs">
+          <span class="text-slate-400 font-bold text-[11px]">選択コース:</span>
+          <span id="selected-course-label" class="text-amber-400 font-extrabold text-xs tracking-wide">
             ⑤ ど真ん中
           </span>
         </div>
 
-        <!-- 1. 高め外枠コーナーボール球 (左高内 / 右高外) -->
-        <div class="corner-row">
-          <button type="button" class="zone-corner-btn" data-course="左高内">
+        <!-- 1. 高めボール球（必ず左右横並び2分割） -->
+        <div class="flex flex-row gap-1.5 w-full">
+          <button type="button" class="zone-corner-btn flex-1 h-7 flex flex-row items-center justify-center gap-1 bg-slate-800/90 hover:bg-slate-700 border border-dashed border-slate-600 rounded-md text-slate-300 text-[11px] font-bold transition relative" data-course="左高内">
             <span>左高内</span>
-            <span class="text-[9px] text-slate-400">(高内ボール)</span>
-            <span class="pitch-count-badge hidden" data-badge="左高内">0</span>
+            <span class="text-[9px] text-slate-400">(高内)</span>
+            <span class="pitch-count-badge hidden absolute top-0.5 right-1 text-[8px] bg-slate-950 px-1 rounded-full border border-slate-600" data-badge="左高内">0</span>
           </button>
-          <button type="button" class="zone-corner-btn" data-course="右高外">
+          <button type="button" class="zone-corner-btn flex-1 h-7 flex flex-row items-center justify-center gap-1 bg-slate-800/90 hover:bg-slate-700 border border-dashed border-slate-600 rounded-md text-slate-300 text-[11px] font-bold transition relative" data-course="右高外">
             <span>右高外</span>
-            <span class="text-[9px] text-slate-400">(高外ボール)</span>
-            <span class="pitch-count-badge hidden" data-badge="右高外">0</span>
+            <span class="text-[9px] text-slate-400">(高外)</span>
+            <span class="pitch-count-badge hidden absolute top-0.5 right-1 text-[8px] bg-slate-950 px-1 rounded-full border border-slate-600" data-badge="右高外">0</span>
           </button>
         </div>
 
-        <!-- 2. 中央9分割ストライクゾーン -->
-        <div class="strike-zone-9">
+        <!-- 2. 中央9分割ストライクゾーン（高さを32pxに抑えたコンパクトグリッド） -->
+        <div class="strike-zone-9 grid grid-cols-3 gap-1 bg-[#091e14] border-2 border-emerald-600 rounded-lg p-1 w-full">
           ${ZONE_COURSES.STRIKE_9.map((cell) => `
-            <button type="button" class="zone-strike-cell" data-course="${cell.id}">
-              <span class="text-xs font-bold leading-tight">${cell.label.split(" ")[0]}</span>
-              <span class="text-[9px] text-emerald-300/80">${cell.label.split(" ")[1]}</span>
-              <span class="pitch-count-badge hidden" data-badge="${cell.id}">0</span>
+            <button type="button" class="zone-strike-cell h-8 flex flex-row items-center justify-center gap-1 bg-[#102d1d] hover:bg-[#18452c] border border-emerald-700/60 rounded text-slate-100 text-[11px] font-bold transition relative" data-course="${cell.id}">
+              <span class="font-extrabold text-[11px] leading-none">${cell.label.split(" ")[0]}</span>
+              <span class="text-[9px] text-emerald-300/80 leading-none">${cell.label.split(" ")[1]}</span>
+              <span class="pitch-count-badge hidden absolute top-0.5 right-1 text-[8px] bg-slate-950 text-amber-300 px-1 rounded-full border border-slate-600" data-badge="${cell.id}">0</span>
             </button>
           `).join("")}
         </div>
 
-        <!-- 3. 低め外枠コーナーボール球 (左低内 / 右低外) -->
-        <div class="corner-row">
-          <button type="button" class="zone-corner-btn" data-course="左低内">
+        <!-- 3. 低めボール球（必ず左右横並び2分割） -->
+        <div class="flex flex-row gap-1.5 w-full">
+          <button type="button" class="zone-corner-btn flex-1 h-7 flex flex-row items-center justify-center gap-1 bg-slate-800/90 hover:bg-slate-700 border border-dashed border-slate-600 rounded-md text-slate-300 text-[11px] font-bold transition relative" data-course="左低内">
             <span>左低内</span>
-            <span class="text-[9px] text-slate-400">(低内ボール)</span>
-            <span class="pitch-count-badge hidden" data-badge="左低内">0</span>
+            <span class="text-[9px] text-slate-400">(低内)</span>
+            <span class="pitch-count-badge hidden absolute top-0.5 right-1 text-[8px] bg-slate-950 px-1 rounded-full border border-slate-600" data-badge="左低内">0</span>
           </button>
-          <button type="button" class="zone-corner-btn" data-course="右低外">
+          <button type="button" class="zone-corner-btn flex-1 h-7 flex flex-row items-center justify-center gap-1 bg-slate-800/90 hover:bg-slate-700 border border-dashed border-slate-600 rounded-md text-slate-300 text-[11px] font-bold transition relative" data-course="右低外">
             <span>右低外</span>
-            <span class="text-[9px] text-slate-400">(低外ボール)</span>
-            <span class="pitch-count-badge hidden" data-badge="右低外">0</span>
+            <span class="text-[9px] text-slate-400">(低外)</span>
+            <span class="pitch-count-badge hidden absolute top-0.5 right-1 text-[8px] bg-slate-950 px-1 rounded-full border border-slate-600" data-badge="右低外">0</span>
           </button>
         </div>
 
-        <!-- 4. 特殊球 (ワンバウンド / 抜け球・暴投) -->
-        <div class="special-pitch-row">
-          <button type="button" class="special-pitch-btn" data-course="ワンバウンド">
+        <!-- 4. 特殊球（ワンバウンド / 抜け球・暴投：左右横並び） -->
+        <div class="flex flex-row gap-1.5 w-full">
+          <button type="button" class="special-pitch-btn flex-1 h-6 flex flex-row items-center justify-center gap-1 bg-[#281a2e] hover:bg-[#3d2047] border border-[#701a75] rounded text-[#f472b6] text-[10px] font-bold transition relative" data-course="ワンバウンド">
             <span>💥 ワンバウンド</span>
-            <span class="pitch-count-badge hidden" data-badge="ワンバウンド">0</span>
+            <span class="pitch-count-badge hidden absolute top-0.5 right-1 text-[8px] bg-slate-950 px-1 rounded-full border border-slate-600" data-badge="ワンバウンド">0</span>
           </button>
-          <button type="button" class="special-pitch-btn" data-course="抜け球">
+          <button type="button" class="special-pitch-btn flex-1 h-6 flex flex-row items-center justify-center gap-1 bg-[#281a2e] hover:bg-[#3d2047] border border-[#701a75] rounded text-[#f472b6] text-[10px] font-bold transition relative" data-course="抜け球">
             <span>⚡️ 抜け球・暴投</span>
-            <span class="pitch-count-badge hidden" data-badge="抜け球">0</span>
+            <span class="pitch-count-badge hidden absolute top-0.5 right-1 text-[8px] bg-slate-950 px-1 rounded-full border border-slate-600" data-badge="抜け球">0</span>
           </button>
         </div>
 
-        <!-- 5. 投球判定アクションボタングリッド -->
-        <div class="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-slate-800">
-          <button type="button" id="btn-pitch-ball" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-extrabold py-3 rounded-xl text-sm shadow-md flex flex-col items-center justify-center transition">
-            <span>ボール</span>
-            <span class="text-[10px] text-emerald-200 font-normal">Bカウント追加</span>
+        <!-- 5. 投球判定アクションボタングリッド（高さと余白を引き締め） -->
+        <div class="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-800">
+          <button type="button" id="btn-pitch-ball" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black py-2 rounded-lg text-xs shadow flex flex-col items-center justify-center transition">
+            <span class="text-xs">ボール</span>
+            <span class="text-[9px] text-emerald-200 font-normal leading-tight">Bカウント</span>
           </button>
 
-          <button type="button" id="btn-pitch-looking-strike" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-extrabold py-3 rounded-xl text-sm shadow-md flex flex-col items-center justify-center transition">
-            <span>見逃し</span>
-            <span class="text-[10px] text-amber-200 font-normal">Sカウント追加</span>
+          <button type="button" id="btn-pitch-looking-strike" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-black py-2 rounded-lg text-xs shadow flex flex-col items-center justify-center transition">
+            <span class="text-xs">見逃し</span>
+            <span class="text-[9px] text-amber-200 font-normal leading-tight">Sカウント</span>
           </button>
 
-          <button type="button" id="btn-pitch-swinging-strike" class="bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-slate-950 font-extrabold py-3 rounded-xl text-sm shadow-md flex flex-col items-center justify-center transition">
-            <span>空振り</span>
-            <span class="text-[10px] text-slate-800 font-normal">Sカウント追加</span>
+          <button type="button" id="btn-pitch-swinging-strike" class="bg-yellow-500 hover:bg-yellow-400 active:scale-95 text-slate-950 font-black py-2 rounded-lg text-xs shadow flex flex-col items-center justify-center transition">
+            <span class="text-xs">空振り</span>
+            <span class="text-[9px] text-slate-900 font-normal leading-tight">Sカウント</span>
           </button>
 
-          <button type="button" id="btn-pitch-foul" class="bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 font-bold py-2.5 rounded-xl text-xs shadow transition">
+          <button type="button" id="btn-pitch-foul" class="bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 font-bold py-1.5 rounded-lg text-[11px] shadow transition">
             <span>ファウル</span>
           </button>
 
-          <button type="button" id="btn-pitch-hbp" class="bg-rose-800 hover:bg-rose-700 active:scale-95 text-rose-100 font-bold py-2.5 rounded-xl text-xs shadow transition">
+          <button type="button" id="btn-pitch-hbp" class="bg-rose-800 hover:bg-rose-700 active:scale-95 text-rose-100 font-bold py-1.5 rounded-lg text-[11px] shadow transition">
             <span>死球 (HBP)</span>
           </button>
 
-          <button type="button" id="btn-pitch-inplay" class="bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-extrabold py-2.5 rounded-xl text-xs shadow-md border border-sky-400 flex items-center justify-center gap-1 transition">
+          <button type="button" id="btn-pitch-inplay" class="bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-black py-1.5 rounded-lg text-[11px] shadow border border-sky-400 flex items-center justify-center gap-1 transition">
             <span>⚾️ 打球・結果</span>
           </button>
         </div>
