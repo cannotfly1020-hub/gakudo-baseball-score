@@ -4,8 +4,8 @@
  * 
  * 改善点:
  * - PC画面では「左: グラウンドCanvas」「右: 結果・球質・得点・決定」の横並び2カラム構成
- * - 縦スクロール一切不要で、着弾点指定から決定までをワン画面で完結
- * - スマホでは指で押しやすいコンパクトな縦並びを維持
+ * - 選択中ボタンのコントラストを大幅強化（鮮烈なアクセントカラー＋白リング枠線＋太字）
+ * - 未選択ボタンもしっかりとしたボタン枠と背景色を持たせ、選択状態の視認性を劇的に向上
  */
 
 const RESULT_COLORS = {
@@ -48,7 +48,7 @@ export class SprayModalComponent {
 
   render() {
     this.container.innerHTML = `
-      <div id="spray-modal-backdrop" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 select-none">
+      <div id="spray-modal-backdrop" class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 select-none">
         <div class="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg md:max-w-3xl p-3 sm:p-4 shadow-2xl space-y-2.5">
           
           <!-- ヘッダー: タイトル & コース & 閉じる -->
@@ -82,33 +82,43 @@ export class SprayModalComponent {
             </div>
 
             <!-- 【右カラム】結果・球質・得点選択 & 決定アクション -->
-            <div class="w-full flex-1 flex flex-col justify-between gap-2">
+            <div class="w-full flex-1 flex flex-col justify-between gap-2.5">
               
               <!-- 1. 打球結果種別 -->
               <div>
-                <span class="text-[11px] font-bold text-slate-300 block mb-1">① 打球結果:</span>
-                <div class="grid grid-cols-4 gap-1" id="group-results">
-                  <button type="button" class="btn-spray-opt active" data-val="凡打">凡打 (アウト)</button>
-                  <button type="button" class="btn-spray-opt text-sky-300" data-val="単打">単打 (1塁打)</button>
-                  <button type="button" class="btn-spray-opt text-rose-300 font-bold" data-val="二塁打">二塁打</button>
-                  <button type="button" class="btn-spray-opt text-rose-400 font-black" data-val="本塁打">本塁打 (HR)</button>
-                  <button type="button" class="btn-spray-opt text-rose-300 font-bold" data-val="三塁打">三塁打</button>
-                  <button type="button" class="btn-spray-opt text-emerald-300" data-val="送りバント">送りバント</button>
-                  <button type="button" class="btn-spray-opt text-emerald-300" data-val="スクイズ">スクイズ</button>
-                  <button type="button" class="btn-spray-opt text-emerald-300" data-val="犠牲フライ">犠牲フライ</button>
-                  <button type="button" class="btn-spray-opt text-amber-300" data-val="失策">失策 (エラー)</button>
-                  <button type="button" class="btn-spray-opt text-amber-300" data-val="野選">野選 (FC)</button>
-                  <button type="button" class="btn-spray-opt text-purple-300" data-val="振り逃げ">振り逃げ</button>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-[11px] font-bold text-slate-300">① 打球結果:</span>
+                  <span id="label-selected-result" class="text-[10px] text-sky-400 font-bold bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800">
+                    選択中: 凡打 (アウト)
+                  </span>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5" id="group-results">
+                  <button type="button" class="btn-spray-opt" data-val="凡打">凡打 (アウト)</button>
+                  <button type="button" class="btn-spray-opt" data-val="単打">単打 (1塁打)</button>
+                  <button type="button" class="btn-spray-opt" data-val="二塁打">二塁打</button>
+                  <button type="button" class="btn-spray-opt" data-val="本塁打">本塁打 (HR)</button>
+                  <button type="button" class="btn-spray-opt" data-val="三塁打">三塁打</button>
+                  <button type="button" class="btn-spray-opt" data-val="送りバント">送りバント</button>
+                  <button type="button" class="btn-spray-opt" data-val="スクイズ">スクイズ</button>
+                  <button type="button" class="btn-spray-opt" data-val="犠牲フライ">犠牲フライ</button>
+                  <button type="button" class="btn-spray-opt" data-val="失策">失策 (エラー)</button>
+                  <button type="button" class="btn-spray-opt" data-val="野選">野選 (FC)</button>
+                  <button type="button" class="btn-spray-opt" data-val="振り逃げ">振り逃げ</button>
                 </div>
               </div>
 
               <!-- 2. 打球の質 ＆ 発生得点 -->
-              <div class="grid grid-cols-2 gap-2">
+              <div class="grid grid-cols-2 gap-2.5">
                 <!-- 球質 -->
                 <div>
-                  <span class="text-[11px] font-bold text-slate-300 block mb-1">② 打球の質:</span>
-                  <div class="grid grid-cols-2 gap-1" id="group-quality">
-                    <button type="button" class="btn-spray-quality active" data-val="ゴロ">ゴロ</button>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] font-bold text-slate-300">② 打球の質:</span>
+                    <span id="label-selected-quality" class="text-[10px] text-emerald-400 font-bold">
+                      ゴロ
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-1.5" id="group-quality">
+                    <button type="button" class="btn-spray-quality" data-val="ゴロ">ゴロ</button>
                     <button type="button" class="btn-spray-quality" data-val="フライ">フライ</button>
                     <button type="button" class="btn-spray-quality" data-val="ライナー">ライナー</button>
                     <button type="button" class="btn-spray-quality" data-val="バント">バント</button>
@@ -117,9 +127,14 @@ export class SprayModalComponent {
 
                 <!-- 発生得点 -->
                 <div>
-                  <span class="text-[11px] font-bold text-slate-300 block mb-1">③ 発生得点:</span>
-                  <div class="grid grid-cols-4 gap-1" id="group-runs">
-                    <button type="button" class="btn-spray-runs active" data-val="0">0点</button>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] font-bold text-slate-300">③ 発生得点:</span>
+                    <span id="label-selected-runs" class="text-[10px] text-amber-400 font-bold">
+                      0点
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-4 gap-1.5" id="group-runs">
+                    <button type="button" class="btn-spray-runs" data-val="0">0点</button>
                     <button type="button" class="btn-spray-runs" data-val="1">1点</button>
                     <button type="button" class="btn-spray-runs" data-val="2">2点</button>
                     <button type="button" class="btn-spray-runs" data-val="3">3+</button>
@@ -128,8 +143,8 @@ export class SprayModalComponent {
               </div>
 
               <!-- 3. アクションボタン（決定 / キャンセル） -->
-              <div class="flex items-center gap-2 pt-1 border-t border-slate-800">
-                <button type="button" id="btn-modal-cancel" class="w-1/3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 font-bold py-2 sm:py-2.5 rounded-xl text-xs transition">
+              <div class="flex items-center gap-2 pt-2 border-t border-slate-800">
+                <button type="button" id="btn-modal-cancel" class="w-1/3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 font-bold py-2 sm:py-2.5 rounded-xl text-xs transition border border-slate-700">
                   キャンセル
                 </button>
                 <button type="button" id="btn-modal-submit" class="w-2/3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black py-2 sm:py-2.5 rounded-xl text-xs shadow-lg transition flex items-center justify-center gap-1.5">
@@ -149,33 +164,51 @@ export class SprayModalComponent {
   }
 
   applyButtonStyles() {
-    const styleOpt = (btn, isActive) => {
-      btn.className = isActive
-        ? "bg-sky-600 border-2 border-sky-300 text-white font-black py-1.5 px-1 rounded-lg text-[10px] text-center shadow transition"
-        : "bg-slate-800/90 border border-slate-700 text-slate-300 hover:text-white font-medium py-1.5 px-1 rounded-lg text-[10px] text-center transition";
-    };
-
-    const styleQuality = (btn, isActive) => {
-      btn.className = isActive
-        ? "bg-emerald-600 border-2 border-emerald-300 text-white font-black py-1.5 rounded-lg text-[11px] text-center shadow transition"
-        : "bg-slate-800/90 border border-slate-700 text-slate-300 hover:text-white py-1.5 rounded-lg text-[11px] text-center transition";
-    };
-
-    const styleRuns = (btn, isActive) => {
-      btn.className = isActive
-        ? "bg-amber-600 border-2 border-amber-300 text-white font-black py-1.5 rounded-lg text-[11px] text-center shadow transition"
-        : "bg-slate-800/90 border border-slate-700 text-slate-300 hover:text-white py-1.5 rounded-lg text-[11px] text-center transition";
-    };
-
+    // 1. 打球結果ボタン（選択時は鮮やかな青・白リング・太字、未選択時は落ち着いた濃紺＋枠線）
     this.container.querySelectorAll(".btn-spray-opt").forEach((btn) => {
-      styleOpt(btn, btn.getAttribute("data-val") === this.selectedResult);
+      const val = btn.getAttribute("data-val");
+      const isActive = val === this.selectedResult;
+
+      if (isActive) {
+        btn.className = "btn-spray-opt bg-sky-500 text-white font-black py-2 px-1 rounded-lg text-[11px] text-center shadow-lg ring-2 ring-white transition transform scale-[1.02]";
+      } else {
+        btn.className = "btn-spray-opt bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white font-medium py-2 px-1 rounded-lg text-[11px] text-center border border-slate-700 transition";
+      }
     });
+
+    // 2. 打球の質ボタン（選択時はエメラルドグリーン・白リング・太字）
     this.container.querySelectorAll(".btn-spray-quality").forEach((btn) => {
-      styleQuality(btn, btn.getAttribute("data-val") === this.selectedQuality);
+      const val = btn.getAttribute("data-val");
+      const isActive = val === this.selectedQuality;
+
+      if (isActive) {
+        btn.className = "btn-spray-quality bg-emerald-500 text-white font-black py-2 rounded-lg text-xs text-center shadow-lg ring-2 ring-white transition transform scale-[1.02]";
+      } else {
+        btn.className = "btn-spray-quality bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white font-medium py-2 rounded-lg text-xs text-center border border-slate-700 transition";
+      }
     });
+
+    // 3. 発生得点ボタン（選択時はアンバー・白リング・太字）
     this.container.querySelectorAll(".btn-spray-runs").forEach((btn) => {
-      styleRuns(btn, parseInt(btn.getAttribute("data-val"), 10) === this.selectedRuns);
+      const val = parseInt(btn.getAttribute("data-val"), 10);
+      const isActive = val === this.selectedRuns;
+
+      if (isActive) {
+        btn.className = "btn-spray-runs bg-amber-500 text-white font-black py-2 rounded-lg text-xs text-center shadow-lg ring-2 ring-white transition transform scale-[1.02]";
+      } else {
+        btn.className = "btn-spray-runs bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white font-medium py-2 rounded-lg text-xs text-center border border-slate-700 transition";
+      }
     });
+
+    // 上部のバッジ表示も同期
+    const labelResult = this.container.querySelector("#label-selected-result");
+    if (labelResult) labelResult.textContent = `選択中: ${this.selectedResult}`;
+
+    const labelQuality = this.container.querySelector("#label-selected-quality");
+    if (labelQuality) labelQuality.textContent = this.selectedQuality;
+
+    const labelRuns = this.container.querySelector("#label-selected-runs");
+    if (labelRuns) labelRuns.textContent = `${this.selectedRuns}点`;
   }
 
   setupCanvas() {
