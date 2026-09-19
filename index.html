@@ -26,6 +26,12 @@
       <p class="text-[10px] text-slate-400">gakudo-baseball-score</p>
     </div>
     <div class="flex items-center gap-1.5">
+      <button id="btn-open-roster" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold px-2 py-1.5 rounded-lg border border-sky-900/50 flex items-center gap-1 shadow">
+        📋 オーダー
+      </button>
+      <button id="btn-export-csv" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold px-2 py-1.5 rounded-lg border border-emerald-900/50 flex items-center gap-1 shadow" title="公式スコアCSVを保存">
+        📤 CSV
+      </button>
       <button id="btn-undo" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow">
         ↺ 1球取消
       </button>
@@ -59,7 +65,12 @@
     <!-- 打球詳細・Canvasモーダル -->
   </div>
 
-  <!-- 6. ES Modules エントリーポイント (司令塔) -->
+  <!-- 6. モーダルスロット: 団員名簿マスタ ＆ オーダー編成 (rosterView.js が制御) -->
+  <div id="roster-modal-slot" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 p-3 overflow-y-auto flex items-center justify-center">
+    <!-- rosterView.js によって描画されます -->
+  </div>
+
+  <!-- 7. ES Modules エントリーポイント (司令塔) -->
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
