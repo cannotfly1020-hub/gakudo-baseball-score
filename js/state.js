@@ -1,7 +1,7 @@
 /**
  * js/state.js
  * 試合状態の一元管理（BSO、走者、球数、イニング、投球履歴）
- * 他のモジュールに依存せず、純粋なデータと更新ロジックのみを保持します。
+ * 得点配列をイニング番号（state.inning）と直接同期させ、表裏のズレを根絶
  */
 
 export class GameState {
@@ -12,11 +12,11 @@ export class GameState {
       strikes: 0,
       outs: 0,
 
-      // イニング・得点
+      // イニング・得点（各イニングのindex = イニング番号 - 1）
       inning: 1,
-      isTop: true, // true: 表, false: 裏
-      awayScore: [0],
-      homeScore: [0],
+      isTop: true, // true: 表 (先攻), false: 裏 (後攻)
+      awayScore: [0], // 先攻得点
+      homeScore: [],  // 後攻得点（1回裏開始時に[0]になる）
 
       // 球数・タイマー設定
       pitchCount: 0,
@@ -41,28 +41,22 @@ export class GameState {
       history: []
     };
 
-    // 状態変更を各コンポーネントに通知するリスナー群
     this.listeners = [];
   }
 
-  // 購読（コンポーネントが状態変更を受け取るための登録）
   subscribe(listener) {
     this.listeners.push(listener);
   }
 
-  // 全リスナーへ更新を通知
   notify() {
     this.listeners.forEach((listener) => listener(this.state));
   }
 
-  // 現在の状態スナップショットを取得
   getState() {
     return this.state;
   }
 
-  // 1球の記録処理
   recordPitch(course, resultType) {
-    // 巻き戻し（Undo）用に直前の状態をディープコピーして保存
     const snapshot = JSON.parse(JSON.stringify(this.state));
 
     let pitchEvent = {
@@ -93,75 +87,72 @@ export class GameState {
         break;
     }
 
-    // 履歴にスナップショットとイベントをプッシュ
     this.state.history.push({ snapshot, pitchEvent });
     this.notify();
   }
 
-  // ボール処理
   handleBall() {
     if (this.state.balls < 3) {
       this.state.balls += 1;
     } else {
-      // 4ボール ➔ 四球出塁
       this.advanceWalk();
       this.resetCount();
     }
   }
 
-  // ストライク処理（見逃し・空振り）
   handleStrike() {
     if (this.state.strikes < 2) {
       this.state.strikes += 1;
     } else {
-      // 3ストライク ➔ 奪三振アウト
       this.handleOut();
       this.resetCount();
     }
   }
 
-  // ファウル処理
   handleFoul() {
     if (this.state.strikes < 2) {
       this.state.strikes += 1;
     }
-    // 2ストライク以降はカウント据え置き
   }
 
-  // 死球処理
   handleHitByPitch() {
     this.advanceWalk();
     this.resetCount();
   }
 
-  // アウト処理
   handleOut() {
     if (this.state.outs < 2) {
       this.state.outs += 1;
     } else {
-      // 3アウト ➔ チェンジ（攻守交代）
-      this.handleSideRetied();
+      this.handleSideRetired();
     }
   }
 
-  // 攻守交代
-  handleSideRetied() {
+  // 攻守交代処理（得点配列の二重追加を解消）
+  handleSideRetired() {
     this.state.balls = 0;
     this.state.strikes = 0;
     this.state.outs = 0;
     this.state.runners = { 1: false, 2: false, 3: false };
 
     if (!this.state.isTop) {
+      // 裏が終わったらイニングを進める
       this.state.inning += 1;
       this.state.isTop = true;
-      this.state.awayScore.push(0);
+      const idx = this.state.inning - 1;
+      if (this.state.awayScore[idx] === undefined) {
+        this.state.awayScore[idx] = 0;
+      }
     } else {
+      // 表が終わったら裏へ
       this.state.isTop = false;
-      this.state.homeScore.push(0);
+      const idx = this.state.inning - 1;
+      if (this.state.homeScore[idx] === undefined) {
+        this.state.homeScore[idx] = 0;
+      }
     }
   }
 
-  // 四死球時の押し出し進塁ロジック
   advanceWalk() {
     if (!this.state.runners[1]) {
       this.state.runners[1] = true;
@@ -170,29 +161,31 @@ export class GameState {
     } else if (!this.state.runners[3]) {
       this.state.runners[3] = true;
     } else {
-      // 満塁押し出し（得点加算）
       this.addRun(1);
     }
   }
 
-  // 得点加算
+  // 現在のイニングに対して厳密に得点を加算
   addRun(points = 1) {
+    const idx = this.state.inning - 1;
     if (this.state.isTop) {
-      const idx = this.state.awayScore.length - 1;
-      this.state.awayScore[idx] += points;
+      while (this.state.awayScore.length <= idx) {
+        this.state.awayScore.push(0);
+      }
+      this.state.awayScore[idx] = (this.state.awayScore[idx] || 0) + points;
     } else {
-      const idx = this.state.homeScore.length - 1;
-      this.state.homeScore[idx] += points;
+      while (this.state.homeScore.length <= idx) {
+        this.state.homeScore.push(0);
+      }
+      this.state.homeScore[idx] = (this.state.homeScore[idx] || 0) + points;
     }
   }
 
-  // カウントリセット（打者完了時）
   resetCount() {
     this.state.balls = 0;
     this.state.strikes = 0;
   }
 
-  // 走者手動トグル（画面の塁タップによる手動補正）
   toggleRunner(base) {
     if (this.state.runners[base] !== undefined) {
       this.state.runners[base] = !this.state.runners[base];
@@ -200,7 +193,6 @@ export class GameState {
     }
   }
 
-  // 1球アンドゥ（取消）
   undo() {
     if (this.state.history.length === 0) return;
     const lastAction = this.state.history.pop();
