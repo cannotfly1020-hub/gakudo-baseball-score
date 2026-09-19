@@ -1,0 +1,284 @@
+/* ==========================================================================
+Components CSS - gakudo-baseball-score
+17分割盤面 / BSOランプ / 走者ダイアモンド / スコアボード / モーダル
+========================================================================== */
+
+/* --------------------------------------------------------------------------
+
+17分割 投球コース盤面 (zone.js)
+-------------------------------------------------------------------------- */
+.zone-container {
+display: flex;
+flex-direction: column;
+gap: 6px;
+width: 100%;
+max-width: 440px;
+margin: 0 auto;
+background: var(--bg-panel);
+border: 1px solid var(--border-color);
+border-radius: 16px;
+padding: 10px;
+box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* コーナーボール球ボタン（高め/低め） */
+.corner-row {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 8px;
+}
+
+.zone-corner-btn {
+background: #1e293b;
+border: 1px dashed #475569;
+border-radius: 10px;
+color: var(--text-sub);
+font-size: 11px;
+font-weight: 700;
+padding: 10px 4px;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+gap: 2px;
+position: relative;
+}
+
+.zone-corner-btn.active {
+background: rgba(56, 189, 248, 0.2);
+border: 2px solid var(--border-focus);
+color: #38bdf8;
+}
+
+/* 中央9分割ストライクゾーン */
+.strike-zone-9 {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+grid-template-rows: repeat(3, 1fr);
+gap: 4px;
+background: #0f241a;
+border: 2px solid #10b981;
+border-radius: 10px;
+padding: 4px;
+}
+
+.zone-strike-cell {
+background: #143525;
+border: 1px solid rgba(16, 185, 129, 0.3);
+border-radius: 6px;
+aspect-ratio: 1.1 / 1;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+color: #e2e8f0;
+font-size: 12px;
+font-weight: 700;
+position: relative;
+}
+
+.zone-strike-cell.active {
+background: rgba(250, 204, 21, 0.3);
+border: 2px solid var(--strike-yellow);
+color: var(--strike-yellow);
+}
+
+/* 投球数バッジ */
+.pitch-count-badge {
+position: absolute;
+top: 3px;
+right: 3px;
+font-size: 9px;
+background: rgba(15, 23, 42, 0.85);
+border: 1px solid rgba(255, 255, 255, 0.2);
+border-radius: 9999px;
+padding: 0 4px;
+line-height: 1.3;
+}
+
+/* 特殊球（ワンバウンド / 抜け球・暴投） */
+.special-pitch-row {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 8px;
+}
+
+.special-pitch-btn {
+background: #281a2e;
+border: 1px solid #701a75;
+border-radius: 10px;
+color: #f472b6;
+font-size: 11px;
+font-weight: 700;
+padding: 8px 4px;
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 4px;
+}
+
+.special-pitch-btn.active {
+background: #4a044e;
+border: 2px solid #f472b6;
+color: #fdf2f8;
+}
+
+/* --------------------------------------------------------------------------
+2. BSOランプ & 走者ダイアモンド (runnerDiamond.js)
+-------------------------------------------------------------------------- */
+.diamond-panel {
+background: var(--bg-panel);
+border: 1px solid var(--border-color);
+border-radius: 16px;
+padding: 12px;
+display: flex;
+align-items: center;
+justify-content: space-around;
+gap: 8px;
+}
+
+/* BSOランプ群 */
+.bso-group {
+display: flex;
+flex-direction: column;
+gap: 4px;
+}
+
+.bso-row {
+display: flex;
+align-items: center;
+gap: 6px;
+}
+
+.bso-label {
+font-size: 12px;
+font-weight: 800;
+width: 14px;
+}
+
+.lamp {
+width: 14px;
+height: 14px;
+border-radius: 50%;
+background: #1e293b;
+border: 1px solid #475569;
+transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.lamp.ball-on {
+background: var(--ball-green);
+box-shadow: 0 0 8px var(--ball-green);
+border-color: #86efac;
+}
+
+.lamp.strike-on {
+background: var(--strike-yellow);
+box-shadow: 0 0 8px var(--strike-yellow);
+border-color: #fef08a;
+}
+
+.lamp.out-on {
+background: var(--out-red);
+box-shadow: 0 0 8px var(--out-red);
+border-color: #fca5a5;
+}
+
+/* 走者ダイアモンドSVG */
+.diamond-svg-wrap {
+width: 100px;
+height: 90px;
+position: relative;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+
+.base-indicator {
+cursor: pointer;
+fill: #1e293b;
+stroke: #64748b;
+stroke-width: 2;
+transition: fill var(--transition-fast), stroke var(--transition-fast);
+}
+
+.base-indicator.runner-on {
+fill: var(--gold-accent);
+stroke: #fef08a;
+filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.8));
+}
+
+/* --------------------------------------------------------------------------
+3. スコアボード & 球数・タイマー (scoreboard.js)
+-------------------------------------------------------------------------- */
+.scoreboard-table {
+width: 100%;
+border-collapse: collapse;
+font-size: 11px;
+text-align: center;
+}
+
+.scoreboard-table th,
+.scoreboard-table td {
+padding: 4px 2px;
+border: 1px solid var(--border-color);
+}
+
+.scoreboard-table th {
+background: var(--bg-subpanel);
+color: var(--text-muted);
+}
+
+.scoreboard-table td {
+background: #0b1329;
+font-weight: 700;
+}
+
+/* 球数警告カラー */
+.pitch-warning {
+color: var(--strike-yellow) !important;
+}
+
+.pitch-danger {
+color: var(--out-red) !important;
+animation: pulse-danger 1s infinite alternate;
+}
+
+@keyframes pulse-danger {
+from { filter: drop-shadow(0 0 2px var(--out-red)); }
+to { filter: drop-shadow(0 0 8px var(--out-red)); }
+}
+
+/* --------------------------------------------------------------------------
+4. 打球スプレーモーダル (sprayModal.js)
+-------------------------------------------------------------------------- */
+.modal-backdrop {
+position: fixed;
+inset: 0;
+background: rgba(0, 0, 0, 0.85);
+backdrop-filter: blur(4px);
+display: flex;
+align-items: center;
+justify-content: center;
+padding: 12px;
+z-index: 50;
+}
+
+.modal-content {
+background: var(--bg-panel);
+border: 1px solid var(--border-color);
+border-radius: 16px;
+width: 100%;
+max-width: 440px;
+padding: 16px;
+box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+}
+
+#spray-canvas {
+width: 100%;
+aspect-ratio: 1 / 1;
+background: #0f241a;
+border: 1px solid #10b981;
+border-radius: 12px;
+cursor: crosshair;
+touch-action: none;
+}
