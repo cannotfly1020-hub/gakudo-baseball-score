@@ -1,23 +1,24 @@
 /* ==========================================================================
 Components CSS - gakudo-baseball-score
 17分割盤面 / BSOランプ / 走者ダイアモンド / スコアボード / モーダル
+PC・スマホ両対応 1画面完結フィット版
 ========================================================================== */
 
 /* --------------------------------------------------------------------------
 
 17分割 投球コース盤面 (zone.js)
--------------------------------------------------------------------------- */
+-------------------------------------------------------------------------- /
 .zone-container {
 display: flex;
 flex-direction: column;
-gap: 5px;
+gap: 4px;
 width: 100%;
-max-width: 520px;
+max-width: 420px; / PCでの横幅を最適化し、縦伸びを防止 */
 margin: 0 auto;
 background: var(--bg-panel);
 border: 1px solid var(--border-color);
-border-radius: 16px;
-padding: 8px 10px;
+border-radius: 14px;
+padding: 6px 8px;
 box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
@@ -25,22 +26,21 @@ box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 .corner-row {
 display: grid;
 grid-template-columns: 1fr 1fr;
-gap: 6px;
+gap: 4px;
 }
 
 .zone-corner-btn {
 background: #1e293b;
 border: 1px dashed #475569;
-border-radius: 8px;
+border-radius: 6px;
 color: var(--text-sub);
 font-size: 11px;
 font-weight: 700;
-padding: 7px 4px;
+padding: 4px 2px;
 display: flex;
-flex-direction: column;
 align-items: center;
 justify-content: center;
-gap: 1px;
+gap: 4px;
 position: relative;
 transition: all var(--transition-fast);
 }
@@ -49,32 +49,31 @@ transition: all var(--transition-fast);
 background: rgba(56, 189, 248, 0.25);
 border: 2px solid var(--border-focus);
 color: #38bdf8;
-transform: scale(0.99);
 }
 
-/* 中央9分割ストライクゾーン */
+/* 中央9分割ストライクゾーン（縦を低く抑える） */
 .strike-zone-9 {
 display: grid;
 grid-template-columns: repeat(3, 1fr);
 grid-template-rows: repeat(3, 1fr);
-gap: 4px;
+gap: 3px;
 background: #0f241a;
 border: 2px solid #10b981;
-border-radius: 10px;
-padding: 4px;
+border-radius: 8px;
+padding: 3px;
 }
 
 .zone-strike-cell {
 background: #143525;
 border: 1px solid rgba(16, 185, 129, 0.35);
-border-radius: 6px;
-aspect-ratio: 1.35 / 1;
+border-radius: 5px;
+aspect-ratio: 1.8 / 1; /* 比率を横長にして縦の高さを大幅カット */
 display: flex;
 flex-direction: column;
 align-items: center;
 justify-content: center;
 color: #e2e8f0;
-font-size: 11px;
+font-size: 10.5px;
 font-weight: 700;
 position: relative;
 transition: all var(--transition-fast);
@@ -94,35 +93,35 @@ transform: scale(0.98);
 /* 投球数バッジ */
 .pitch-count-badge {
 position: absolute;
-top: 2px;
-right: 3px;
-font-size: 9px;
+top: 1px;
+right: 2px;
+font-size: 8.5px;
 background: rgba(15, 23, 42, 0.9);
 border: 1px solid rgba(255, 255, 255, 0.25);
 border-radius: 9999px;
-padding: 0 4px;
-line-height: 1.3;
+padding: 0 3px;
+line-height: 1.2;
 }
 
 /* 特殊球（ワンバウンド / 抜け球・暴投） */
 .special-pitch-row {
 display: grid;
 grid-template-columns: 1fr 1fr;
-gap: 6px;
+gap: 4px;
 }
 
 .special-pitch-btn {
 background: #281a2e;
 border: 1px solid #701a75;
-border-radius: 8px;
+border-radius: 6px;
 color: #f472b6;
-font-size: 11px;
+font-size: 10.5px;
 font-weight: 700;
-padding: 6px 4px;
+padding: 4px 2px;
 display: flex;
 align-items: center;
 justify-content: center;
-gap: 4px;
+gap: 3px;
 transition: all var(--transition-fast);
 }
 
@@ -138,25 +137,24 @@ color: #fdf2f8;
 .diamond-panel {
 background: var(--bg-panel);
 border: 1px solid var(--border-color);
-border-radius: 16px;
-padding: 8px 12px;
+border-radius: 14px;
+padding: 6px 10px;
 display: flex;
 align-items: center;
 justify-content: space-around;
-gap: 8px;
+gap: 6px;
 }
 
-/* BSOランプ群 */
 .bso-group {
 display: flex;
 flex-direction: column;
-gap: 3px;
+gap: 2px;
 }
 
 .bso-row {
 display: flex;
 align-items: center;
-gap: 5px;
+gap: 4px;
 }
 
 .bso-label {
@@ -166,8 +164,8 @@ width: 12px;
 }
 
 .lamp {
-width: 13px;
-height: 13px;
+width: 12px;
+height: 12px;
 border-radius: 50%;
 background: #1e293b;
 border: 1px solid #475569;
@@ -176,26 +174,26 @@ transition: background-color var(--transition-fast), box-shadow var(--transition
 
 .lamp.ball-on {
 background: var(--ball-green);
-box-shadow: 0 0 8px var(--ball-green);
+box-shadow: 0 0 6px var(--ball-green);
 border-color: #86efac;
 }
 
 .lamp.strike-on {
 background: var(--strike-yellow);
-box-shadow: 0 0 8px var(--strike-yellow);
+box-shadow: 0 0 6px var(--strike-yellow);
 border-color: #fef08a;
 }
 
 .lamp.out-on {
 background: var(--out-red);
-box-shadow: 0 0 8px var(--out-red);
+box-shadow: 0 0 6px var(--out-red);
 border-color: #fca5a5;
 }
 
 /* 走者ダイアモンドSVG */
 .diamond-svg-wrap {
-width: 86px;
-height: 78px;
+width: 78px;
+height: 70px;
 position: relative;
 display: flex;
 align-items: center;
@@ -228,7 +226,7 @@ text-align: center;
 
 .scoreboard-table th,
 .scoreboard-table td {
-padding: 3px 2px;
+padding: 2.5px 2px;
 border: 1px solid var(--border-color);
 }
 
