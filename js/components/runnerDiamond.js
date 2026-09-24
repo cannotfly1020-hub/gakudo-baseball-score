@@ -1,272 +1,311 @@
 /**
- * js/app.js
- * 学童野球 1球速報 アプリケーション・エントリーポイント（司令塔）
- * 全コンポーネントの初期化、新規試合安全リセット、 IndexedDB自動保存の統括
+ * js/components/runnerDiamond.js
+ * 走者ダイアモンド ＆ BSOランプコンポーネント
+ * 
+ * 担当役割:
+ * - BSOランプ（ボール:緑3 / ストライク:黄2 / アウト:赤2）の点灯管理 ＆ 直接タップ補正
+ * - 走者ダイアモンド（SVG）の描画および各塁（1〜3塁）のワンタップ在塁トグル
+ * - 現在の打者・投手情報の表示
+ * - 走塁・野手イベントボタン（盗塁、盗塁刺、暴投進塁、牽制死）の発火
+ * - 直近投球ログスロット（#log-slot）の自動更新
  */
 
-import { GameState } from "./state.js";
-import { ScoreboardComponent } from "./components/scoreboard.js";
-import { RunnerDiamondComponent } from "./components/runnerDiamond.js";
-import { ZoneComponent } from "./components/zone.js";
-import { SprayModalComponent } from "./components/sprayModal.js";
-import { RosterViewComponent } from "./components/rosterView.js";
-import { dbStorage } from "./storage/indexedDb.js";
-import { DataExporter } from "./storage/exporter.js";
+export class RunnerDiamondComponent {
+  constructor(containerElement, gameState, options = {}) {
+    this.container = containerElement;
+    this.gameState = gameState;
+    this.options = options;
+    this.logContainer = document.getElementById("log-slot");
 
-class AppController {
-  constructor() {
-    this.gameState = new GameState();
-    this.components = {};
-    this.isInitialized = false;
+    this.init();
   }
 
   init() {
-    if (this.isInitialized) return;
-    this.isInitialized = true;
+    this.render();
+    this.bindEvents();
 
-    try {
-      this.initSynchronousUI();
-      this.bindGlobalEvents();
-      this.restoreSavedGame();
-    } catch (err) {
-      console.error("アプリケーション起動中にエラーが発生しました:", err);
-      this.showInitError(err);
-    }
-  }
-
-  initSynchronousUI() {
-    const scoreboardSlot = document.getElementById("scoreboard-slot");
-    const diamondSlot = document.getElementById("diamond-slot");
-    const zoneSlot = document.getElementById("zone-slot");
-    const sprayModalSlot = document.getElementById("spray-modal-slot");
-    const rosterModalSlot = document.getElementById("roster-modal-slot");
-
-    if (scoreboardSlot) {
-      this.components.scoreboard = new ScoreboardComponent(scoreboardSlot, this.gameState);
-    }
-
-    if (diamondSlot) {
-      this.components.diamond = new RunnerDiamondComponent(diamondSlot, this.gameState);
-    }
-
-    if (sprayModalSlot) {
-      this.components.sprayModal = new SprayModalComponent(sprayModalSlot, this.gameState);
-    }
-
-    if (zoneSlot) {
-      this.components.zone = new ZoneComponent(zoneSlot, this.gameState, {
-        onInPlay: (selectedCourse) => this.handleInPlay(selectedCourse)
-      });
-    }
-
-    if (rosterModalSlot) {
-      this.components.rosterView = new RosterViewComponent(rosterModalSlot, this.gameState);
-    }
-
-    // 1球記録ごとにIndexedDBへ自動保存
     this.gameState.subscribe((state) => {
-      dbStorage.saveActiveGame(state);
+      this.update(state);
     });
+
+    this.update(this.gameState.getState());
   }
 
-  bindGlobalEvents() {
-    // 1球取消（アンドゥ）
-    const btnUndo = document.getElementById("btn-undo");
-    if (btnUndo) {
-      btnUndo.addEventListener("click", (e) => {
-        e.preventDefault();
-        this.gameState.undo();
-      });
-    }
-
-    // 新規試合開始（安全確認モーダル）
-    const btnReset = document.getElementById("btn-reset-game");
-    if (btnReset) {
-      btnReset.addEventListener("click", (e) => {
-        e.preventDefault();
-        this.openResetConfirmModal();
-      });
-    }
-
-    // オーダー編成モーダル表示
-    const btnRoster = document.getElementById("btn-open-roster");
-    const rosterSlot = document.getElementById("roster-modal-slot");
-    if (btnRoster && rosterSlot) {
-      btnRoster.addEventListener("click", () => {
-        rosterSlot.classList.remove("hidden");
-        if (this.components.rosterView) {
-          this.components.rosterView.render();
-          this.components.rosterView.bindEvents();
-        }
-      });
-    }
-
-    // CSVエクスポート
-    const btnCsv = document.getElementById("btn-export-csv");
-    if (btnCsv) {
-      btnCsv.addEventListener("click", () => {
-        const state = this.gameState.getState();
-        DataExporter.exportGameCsv(state);
-      });
-    }
-
-    // PCキーボードショートカット (Ctrl + Z で1球取消)
-    window.addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        this.gameState.undo();
-      }
-    });
-  }
-
-  openResetConfirmModal() {
-    const modalSlot = document.getElementById("reset-modal-slot");
-    if (!modalSlot) return;
-
-    modalSlot.innerHTML = `
-      <div class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 select-none">
-        <div class="bg-slate-900 border border-rose-800/80 rounded-2xl p-4 w-full max-w-sm space-y-3 shadow-2xl">
-          <div class="flex items-center gap-2 text-rose-400 border-b border-slate-800 pb-2">
-            <span class="text-xl">⚠️</span>
-            <h3 class="text-sm font-black">試合データの初期化</h3>
+  render() {
+    this.container.innerHTML = `
+      <div class="diamond-panel select-none">
+        
+        <!-- 左側: BSOカウントランプ群（タップして直接カウント補正可能） -->
+        <div class="bso-group cursor-pointer" title="タップしてカウントを直接補正">
+          <!-- ボール (B) -->
+          <div class="bso-row hover:bg-slate-800/40 p-0.5 rounded transition" id="row-bso-b">
+            <span class="bso-label text-emerald-400 font-black">B</span>
+            <div id="lamp-b1" class="lamp"></div>
+            <div id="lamp-b2" class="lamp"></div>
+            <div id="lamp-b3" class="lamp"></div>
           </div>
           
-          <p class="text-xs text-slate-300 leading-relaxed">
-            現在のスコア、投球数、全打席ログを消去して<strong class="text-amber-400">新しい試合を開始</strong>しますか？<br>
-            <span class="text-[10px] text-slate-400 block pt-1">※ 必要な場合は先に「📤 CSV」で保存してください。</span>
-          </p>
-
-          <div class="flex gap-2 pt-2 border-t border-slate-800">
-            <button type="button" id="btn-cancel-reset" class="w-1/2 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition">
-              キャンセル
-            </button>
-            <button type="button" id="btn-confirm-reset" class="w-1/2 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-xs shadow-lg transition">
-              クリアして新規試合
-            </button>
+          <!-- ストライク (S) -->
+          <div class="bso-row hover:bg-slate-800/40 p-0.5 rounded transition" id="row-bso-s">
+            <span class="bso-label text-yellow-400 font-black">S</span>
+            <div id="lamp-s1" class="lamp"></div>
+            <div id="lamp-s2" class="lamp"></div>
+          </div>
+          
+          <!-- アウト (O) -->
+          <div class="bso-row hover:bg-slate-800/40 p-0.5 rounded transition" id="row-bso-o">
+            <span class="bso-label text-rose-500 font-black">O</span>
+            <div id="lamp-o1" class="lamp"></div>
+            <div id="lamp-o2" class="lamp"></div>
           </div>
         </div>
+
+        <!-- 中央: 走者ダイアモンド (SVG) -->
+        <div class="diamond-svg-wrap">
+          <svg viewBox="0 0 100 100" class="w-full h-full">
+            <!-- 塁間ライン -->
+            <polygon points="50,15 85,50 50,85 15,50" 
+                     fill="none" 
+                     stroke="#334155" 
+                     stroke-width="2" 
+                     stroke-dasharray="2 2" />
+            
+            <!-- 本塁 (ホーム) -->
+            <polygon points="50,83 55,87 55,92 45,92 45,87" 
+                     fill="#94a3b8" 
+                     stroke="#cbd5e1" 
+                     stroke-width="1.5" />
+            
+            <!-- 2塁 (Second) -->
+            <polygon id="base-2" class="base-indicator" points="50,10 56,16 50,22 44,16" data-base="2" />
+            
+            <!-- 3塁 (Third) -->
+            <polygon id="base-3" class="base-indicator" points="15,44 21,50 15,56 9,50" data-base="3" />
+            
+            <!-- 1塁 (First) -->
+            <polygon id="base-1" class="base-indicator" points="85,44 91,50 85,56 79,50" data-base="1" />
+          </svg>
+          <span class="absolute bottom-0 text-[9px] text-slate-400 font-bold tracking-wider">塁タップで補正</span>
+        </div>
+
+        <!-- 右側: 対戦情報（投手 / 打者） -->
+        <div class="flex flex-col justify-center gap-1.5 text-xs border-l border-slate-800 pl-3 min-w-[110px]">
+          <div>
+            <span class="text-[10px] text-slate-400 block leading-tight">打者:</span>
+            <span id="current-batter-info" class="font-bold text-slate-100 block truncate">1番 打者 (投)</span>
+          </div>
+          <div>
+            <span class="text-[10px] text-slate-400 block leading-tight">投手:</span>
+            <span id="current-pitcher-info" class="font-bold text-emerald-400 block truncate">先発 投手</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 走塁・野手ワンタップイベントバー -->
+      <div class="grid grid-cols-4 gap-1.5 mt-2">
+        <button type="button" id="btn-runner-steal" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold py-1.5 rounded-lg text-[11px] border border-slate-700 shadow flex items-center justify-center gap-1 transition">
+          <span>🏃 盗塁</span>
+        </button>
+        <button type="button" id="btn-runner-caught" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold py-1.5 rounded-lg text-[11px] border border-slate-700 shadow flex items-center justify-center gap-1 transition">
+          <span>❌ 盗塁刺</span>
+        </button>
+        <button type="button" id="btn-runner-wildpitch" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 font-bold py-1.5 rounded-lg text-[11px] border border-amber-900/50 shadow flex items-center justify-center gap-1 transition">
+          <span>⚡️ 暴投進塁</span>
+        </button>
+        <button type="button" id="btn-runner-pickoff" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold py-1.5 rounded-lg text-[11px] border border-slate-700 shadow flex items-center justify-center gap-1 transition">
+          <span>🎯 牽制死</span>
+        </button>
       </div>
     `;
-    modalSlot.classList.remove("hidden");
-
-    const close = () => modalSlot.classList.add("hidden");
-
-    modalSlot.querySelector("#btn-cancel-reset").addEventListener("click", close);
-    modalSlot.querySelector("#btn-confirm-reset").addEventListener("click", async () => {
-      // 1. IndexedDBのアクティブゲームを消去
-      await dbStorage.clearActiveGame();
-      // 2. GameStateを初期化して全画面へ通知
-      this.gameState.resetGame();
-      // 3. タイマーをリセット
-      if (this.components.scoreboard) {
-        this.components.scoreboard.resetTimer();
-      }
-      close();
-    });
   }
 
-  handleInPlay(selectedCourse) {
-    if (!this.components.sprayModal) return;
-
-    this.components.sprayModal.open({
-      course: selectedCourse,
-      onComplete: (playResult) => {
-        const state = this.gameState.getState();
-        const snapshot = JSON.parse(JSON.stringify(state));
-
-        let runsScored = playResult.runs || 0;
-        let isOut = false;
-
-        // 打球結果に応じた走者とカウント処理
-        switch (playResult.type) {
-          case "単打":
-            if (state.runners[3]) { runsScored += 1; state.runners[3] = false; }
-            if (state.runners[2]) { state.runners[3] = true; state.runners[2] = false; }
-            if (state.runners[1]) { state.runners[2] = true; }
-            state.runners[1] = true;
-            break;
-          case "二塁打":
-            if (state.runners[3]) { runsScored += 1; state.runners[3] = false; }
-            if (state.runners[2]) { runsScored += 1; state.runners[2] = false; }
-            if (state.runners[1]) { state.runners[3] = true; state.runners[1] = false; }
-            state.runners[2] = true;
-            break;
-          case "三塁打":
-            if (state.runners[3]) runsScored += 1;
-            if (state.runners[2]) runsScored += 1;
-            if (state.runners[1]) runsScored += 1;
-            state.runners = { 1: false, 2: false, 3: true };
-            break;
-          case "本塁打":
-            runsScored += 1;
-            if (state.runners[1]) runsScored += 1;
-            if (state.runners[2]) runsScored += 1;
-            if (state.runners[3]) runsScored += 1;
-            state.runners = { 1: false, 2: false, 3: false };
-            break;
-          case "凡打":
-          case "犠牲フライ":
-          case "送りバント":
-            isOut = true;
-            break;
-          default:
-            break;
-        }
-
-        if (runsScored > 0) {
-          this.gameState.addRun(runsScored);
-        }
-
-        const pitchEvent = {
-          pitchNum: state.pitchCount + 1,
-          inningStr: `${state.inning}回${state.isTop ? "表" : "裏"}`,
-          course: selectedCourse,
-          result: `打球 (${playResult.type})`,
-          bsoBefore: `${state.balls}-${state.strikes}-${state.outs}`,
-          play: playResult
-        };
-
-        state.pitchCount += 1;
-        state.history.push({ snapshot, pitchEvent });
-
-        if (isOut) {
-          this.gameState.handleOut();
-        }
-        this.gameState.resetCount();
-        this.gameState.notify();
-      }
+  bindEvents() {
+    // 1塁・2塁・3塁のワンタップ手動トグル
+    const bases = this.container.querySelectorAll(".base-indicator");
+    bases.forEach((baseEl) => {
+      baseEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const baseNum = parseInt(baseEl.getAttribute("data-base"), 10);
+        this.gameState.toggleRunner(baseNum);
+      });
     });
+
+    const rowB = this.container.querySelector("#row-bso-b");
+    const rowS = this.container.querySelector("#row-bso-s");
+    const rowO = this.container.querySelector("#row-bso-o");
+    if (rowB) rowB.addEventListener("click", () => this.gameState.cycleCount("B"));
+    if (rowS) rowS.addEventListener("click", () => this.gameState.cycleCount("S"));
+    if (rowO) rowO.addEventListener("click", () => this.gameState.cycleCount("O"));
+
+    // 走塁イベントボタン群の紐付け
+    const bindBtn = (id, handler) => {
+      const el = this.container.querySelector(`#${id}`);
+      if (el) {
+        el.addEventListener("click", (e) => {
+          e.preventDefault();
+          handler();
+        });
+      }
+    };
+
+    bindBtn("btn-runner-steal", () => this.handleSteal());
+    bindBtn("btn-runner-caught", () => this.handleCaughtStealing());
+    bindBtn("btn-runner-wildpitch", () => this.handleWildPitchAdvance());
+    bindBtn("btn-runner-pickoff", () => this.handlePickoff());
   }
 
-  async restoreSavedGame() {
-    try {
-      const savedState = await dbStorage.loadActiveGame();
-      if (savedState && savedState.history && savedState.history.length > 0) {
-        this.gameState.state = savedState;
-        this.gameState.notify();
-      }
-    } catch (err) {
-      console.warn("保存データの読み込みをスキップしました:", err);
+  update(state) {
+    if (!state) return;
+
+    // 1. BSOランプの点灯切り替え
+    this.updateLamp("lamp-b1", state.balls >= 1, "ball-on");
+    this.updateLamp("lamp-b2", state.balls >= 2, "ball-on");
+    this.updateLamp("lamp-b3", state.balls >= 3, "ball-on");
+
+    this.updateLamp("lamp-s1", state.strikes >= 1, "strike-on");
+    this.updateLamp("lamp-s2", state.strikes >= 2, "strike-on");
+
+    this.updateLamp("lamp-o1", state.outs >= 1, "out-on");
+    this.updateLamp("lamp-o2", state.outs >= 2, "out-on");
+
+    // 2. 走者ダイアモンドの点灯切り替え
+    const b1 = this.container.querySelector("#base-1");
+    const b2 = this.container.querySelector("#base-2");
+    const b3 = this.container.querySelector("#base-3");
+
+    if (b1) b1.classList.toggle("runner-on", Boolean(state.runners[1]));
+    if (b2) b2.classList.toggle("runner-on", Boolean(state.runners[2]));
+    if (b3) b3.classList.toggle("runner-on", Boolean(state.runners[3]));
+
+    // 3. 打者・投手情報の更新
+    const batterEl = this.container.querySelector("#current-batter-info");
+    const pitcherEl = this.container.querySelector("#current-pitcher-info");
+    if (batterEl && state.currentBatter) {
+      batterEl.textContent = `${state.currentBatter.order}番 ${state.currentBatter.name} (${state.currentBatter.pos || "打"})`;
+    }
+    if (pitcherEl && state.currentPitcher) {
+      pitcherEl.textContent = state.currentPitcher.name;
+    }
+
+    // 4. 直近投球ログの更新
+    this.renderLog(state);
+  }
+
+  updateLamp(elementId, isOn, activeClass) {
+    const lamp = this.container.querySelector(`#${elementId}`);
+    if (!lamp) return;
+    if (isOn) {
+      lamp.classList.add(activeClass);
+    } else {
+      lamp.classList.remove(activeClass);
     }
   }
 
-  showInitError(err) {
-    const mainSlot = document.querySelector("main");
-    if (mainSlot) {
-      mainSlot.innerHTML = `
-        <div class="bg-rose-950/80 border border-rose-700 text-rose-200 p-4 rounded-xl text-xs space-y-2">
-          <p class="font-bold">起動中にエラーが発生しました</p>
-          <p class="font-mono text-[11px]">${err.message}</p>
+  renderLog(state) {
+    if (!this.logContainer) return;
+
+    if (!state.history || state.history.length === 0) {
+      this.logContainer.innerHTML = `
+        <div class="text-slate-400 text-center py-1 text-xs">
+          投球履歴はありません（1球目を投球してください）
         </div>
       `;
+      return;
     }
+
+    const recent = state.history.slice(-5).reverse();
+    this.logContainer.innerHTML = `
+      <div class="flex items-center justify-between border-b border-slate-800 pb-1 mb-1.5">
+        <span class="text-slate-400 font-bold text-[11px]">📋 直近の投球ログ</span>
+        <span class="text-emerald-400 text-[10px]">総投球数: ${state.pitchCount}球</span>
+      </div>
+      <div class="space-y-1">
+        ${recent.map((item, idx) => {
+          const p = item.pitchEvent;
+          return `
+            <div class="flex items-center justify-between text-[11px] py-0.5 px-1.5 rounded ${idx === 0 ? "bg-slate-800/80 text-white font-bold" : "text-slate-300"}">
+              <span class="text-slate-400 text-[10px] w-12">${p.inningStr}</span>
+              <span class="text-amber-300 font-bold">${p.course}</span>
+              <span class="text-slate-200">${p.result}</span>
+              <span class="text-[10px] text-slate-400">BSO: ${p.bsoBefore}</span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
   }
-}
 
-const app = new AppController();
+  recordRunnerAction(description, updateFn) {
+    const state = this.gameState.getState();
+    const snapshot = JSON.parse(JSON.stringify(state));
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => app.init());
-} else {
-  app.init();
+    updateFn(state);
+
+    const pitchEvent = {
+      pitchNum: state.pitchCount,
+      inningStr: `${state.inning}回${state.isTop ? "表" : "裏"}`,
+      course: "走塁",
+      result: description,
+      bsoBefore: `${state.balls}-${state.strikes}-${state.outs}`
+    };
+
+    state.history.push({ snapshot, pitchEvent });
+    this.gameState.notify();
+  }
+
+  handleSteal() {
+    this.recordRunnerAction("盗塁成功", (state) => {
+      if (state.runners[2] && !state.runners[3]) {
+        state.runners[3] = true;
+        state.runners[2] = false;
+      } else if (state.runners[1] && !state.runners[2]) {
+        state.runners[2] = true;
+        state.runners[1] = false;
+      }
+    });
+  }
+
+  handleCaughtStealing() {
+    this.recordRunnerAction("盗塁刺（アウト）", (state) => {
+      if (state.runners[2]) {
+        state.runners[2] = false;
+      } else if (state.runners[1]) {
+        state.runners[1] = false;
+      } else if (state.runners[3]) {
+        state.runners[3] = false;
+      }
+      this.gameState.handleOut();
+    });
+  }
+
+  handleWildPitchAdvance() {
+    this.recordRunnerAction("暴投進塁", (state) => {
+      if (state.runners[3]) {
+        state.runners[3] = false;
+        this.gameState.addRun(1);
+      }
+      if (state.runners[2]) {
+        state.runners[3] = true;
+        state.runners[2] = false;
+      }
+      if (state.runners[1]) {
+        state.runners[2] = true;
+        state.runners[1] = false;
+      }
+    });
+  }
+
+  handlePickoff() {
+    this.recordRunnerAction("牽制死", (state) => {
+      if (state.runners[1]) {
+        state.runners[1] = false;
+      } else if (state.runners[2]) {
+        state.runners[2] = false;
+      } else if (state.runners[3]) {
+        state.runners[3] = false;
+      }
+      this.gameState.handleOut();
+    });
+  }
 }
