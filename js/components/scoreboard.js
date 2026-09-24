@@ -304,37 +304,54 @@ export class ScoreboardComponent {
     let totalAway = 0;
     let totalHome = 0;
 
+    const currentInning = state.inning || 1;
+    const isTop = state.isTop !== false;
+    const isTb = !!state.isTieBreak;
+
     for (let i = 1; i <= 6; i++) {
       const awayCell = this.container.querySelector(`#score-a-${i}`);
       const homeCell = this.container.querySelector(`#score-h-${i}`);
 
-      const aVal = state.awayScore[i - 1];
-      const hVal = state.homeScore[i - 1];
-
-      if (awayCell) {
-        awayCell.textContent = aVal !== undefined ? aVal : "-";
-        if (aVal !== undefined) totalAway += aVal;
+      // 先攻 (表): 現在の回以下のイニングのみ得点表示（未来の回は "-"）
+      let aVal = "-";
+      if (i <= currentInning) {
+        const val = state.awayScore ? state.awayScore[i - 1] : undefined;
+        aVal = val !== undefined ? val : 0;
+        totalAway += Number(aVal) || 0;
       }
 
-      if (homeCell) {
-        homeCell.textContent = hVal !== undefined ? hVal : "-";
-        if (hVal !== undefined) totalHome += hVal;
+      // 後攻 (裏): 過去の回、または「現在の回で既に裏に入っている」場合のみ得点表示
+      let hVal = "-";
+      if (i < currentInning || (i === currentInning && !isTop)) {
+        const val = state.homeScore ? state.homeScore[i - 1] : undefined;
+        hVal = val !== undefined ? val : 0;
+        totalHome += Number(hVal) || 0;
       }
+
+      if (awayCell) awayCell.textContent = aVal;
+      if (homeCell) homeCell.textContent = hVal;
     }
 
     const tbAwayCell = this.container.querySelector("#score-a-tb");
     const tbHomeCell = this.container.querySelector("#score-h-tb");
-    const tbValA = state.awayScore[6];
-    const tbValH = state.homeScore[6];
 
-    if (tbAwayCell) {
-      tbAwayCell.textContent = tbValA !== undefined ? tbValA : "-";
-      if (tbValA !== undefined) totalAway += tbValA;
+    let tbValA = "-";
+    let tbValH = "-";
+
+    if (isTb) {
+      const valA = state.awayScore ? state.awayScore[6] : undefined;
+      tbValA = valA !== undefined ? valA : 0;
+      totalAway += Number(tbValA) || 0;
+
+      if (!isTop) {
+        const valH = state.homeScore ? state.homeScore[6] : undefined;
+        tbValH = valH !== undefined ? valH : 0;
+        totalHome += Number(tbValH) || 0;
+      }
     }
-    if (tbHomeCell) {
-      tbHomeCell.textContent = tbValH !== undefined ? tbValH : "-";
-      if (tbValH !== undefined) totalHome += tbValH;
-    }
+
+    if (tbAwayCell) tbAwayCell.textContent = tbValA;
+    if (tbHomeCell) tbHomeCell.textContent = tbValH;
 
     const rAway = this.container.querySelector("#score-a-r");
     const rHome = this.container.querySelector("#score-h-r");
