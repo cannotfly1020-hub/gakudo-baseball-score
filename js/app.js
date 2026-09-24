@@ -35,38 +35,64 @@ class AppController {
   }
 
   initSynchronousUI() {
+    // 1. スコアボード
     const scoreboardSlot = document.getElementById("scoreboard-slot");
-    const diamondSlot = document.getElementById("diamond-slot");
-    const zoneSlot = document.getElementById("zone-slot");
-    const sprayModalSlot = document.getElementById("spray-modal-slot");
-    const rosterModalSlot = document.getElementById("roster-modal-slot");
-
     if (scoreboardSlot) {
-      this.components.scoreboard = new ScoreboardComponent(scoreboardSlot, this.gameState);
+      try {
+        this.components.scoreboard = new ScoreboardComponent(scoreboardSlot, this.gameState);
+      } catch (e) {
+        console.warn("スコアボード初期化警告:", e);
+      }
     }
 
+    // 2. 走者ダイアモンド & BSO
+    const diamondSlot = document.getElementById("diamond-slot");
     if (diamondSlot) {
-      this.components.diamond = new RunnerDiamondComponent(diamondSlot, this.gameState);
+      try {
+        this.components.diamond = new RunnerDiamondComponent(diamondSlot, this.gameState);
+      } catch (e) {
+        console.warn("ダイアモンド初期化警告:", e);
+      }
     }
 
+    // 3. 打球スプレーモーダル
+    const sprayModalSlot = document.getElementById("spray-modal-slot");
     if (sprayModalSlot) {
-      this.components.sprayModal = new SprayModalComponent(sprayModalSlot, this.gameState);
+      try {
+        this.components.sprayModal = new SprayModalComponent(sprayModalSlot, this.gameState);
+      } catch (e) {
+        console.warn("打球モーダル初期化警告:", e);
+      }
     }
 
+    // 4. 17分割投球コース盤面
+    const zoneSlot = document.getElementById("zone-slot");
     if (zoneSlot) {
-      this.components.zone = new ZoneComponent(zoneSlot, this.gameState, {
-        onInPlay: (selectedCourse) => this.handleInPlay(selectedCourse)
-      });
+      try {
+        this.components.zone = new ZoneComponent(zoneSlot, this.gameState, {
+          onInPlay: (selectedCourse) => this.handleInPlay(selectedCourse)
+        });
+      } catch (e) {
+        console.warn("盤面初期化警告:", e);
+      }
     }
 
+    // 5. オーダー・名簿モーダル
+    const rosterModalSlot = document.getElementById("roster-modal-slot");
     if (rosterModalSlot) {
-      this.components.rosterView = new RosterViewComponent(rosterModalSlot, this.gameState);
+      try {
+        this.components.rosterView = new RosterViewComponent(rosterModalSlot, this.gameState);
+      } catch (e) {
+        console.warn("オーダー画面初期化警告:", e);
+      }
     }
 
     // 1球記録ごとにIndexedDBへ自動保存
     this.gameState.subscribe((state) => {
       try {
-        dbStorage.saveActiveGame(state);
+        if (dbStorage && typeof dbStorage.saveActiveGame === "function") {
+          dbStorage.saveActiveGame(state);
+        }
       } catch (e) {
         console.warn("自動保存スキップ:", e);
       }
@@ -114,7 +140,7 @@ class AppController {
       });
     }
 
-    // PCキーボードショートカット (Ctrl + Z で1球取消)
+    // PCキーボードショートカット (Ctrl + Z / Cmd + Z で1球取消)
     window.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -168,15 +194,18 @@ class AppController {
     if (confirmBtn) {
       confirmBtn.addEventListener("click", async () => {
         try {
-          // 1. IndexedDBのアクティブゲームを消去
-          await dbStorage.clearActiveGame();
+          if (dbStorage && typeof dbStorage.clearActiveGame === "function") {
+            await dbStorage.clearActiveGame();
+          }
         } catch (e) {
           console.warn("DBクリア警告:", e);
         }
-        // 2. GameStateを初期化して全画面へ通知
-        this.gameState.resetGame();
-        // 3. タイマーをリセット
-        if (this.components.scoreboard) {
+
+        if (this.gameState && typeof this.gameState.resetGame === "function") {
+          this.gameState.resetGame();
+        }
+
+        if (this.components.scoreboard && typeof this.components.scoreboard.resetTimer === "function") {
           this.components.scoreboard.resetTimer();
         }
         close();
@@ -259,10 +288,12 @@ class AppController {
 
   async restoreSavedGame() {
     try {
-      const savedState = await dbStorage.loadActiveGame();
-      if (savedState && savedState.history && savedState.history.length > 0) {
-        this.gameState.state = savedState;
-        this.gameState.notify();
+      if (dbStorage && typeof dbStorage.loadActiveGame === "function") {
+        const savedState = await dbStorage.loadActiveGame();
+        if (savedState && savedState.history && savedState.history.length > 0) {
+          this.gameState.state = savedState;
+          this.gameState.notify();
+        }
       }
     } catch (err) {
       console.warn("保存データの読み込みをスキップしました:", err);
@@ -273,9 +304,10 @@ class AppController {
     const mainSlot = document.querySelector("main");
     if (mainSlot) {
       mainSlot.innerHTML = `
-        <div class="bg-rose-950/80 border border-rose-700 text-rose-200 p-4 rounded-xl text-xs space-y-2">
-          <p class="font-bold">起動中にエラーが発生しました</p>
-          <p class="font-mono text-[11px]">${err.message}</p>
+        <div class="bg-rose-950/80 border border-rose-700 text-rose-200 p-4 rounded-xl text-xs space-y-2 m-4">
+          <p class="font-bold text-sm">起動中にエラーが発生しました</p>
+          <p class="font-mono text-[11px] bg-slate-950 p-2 rounded">${err.message}</p>
+          <p class="text-[10px] text-slate-400">※ ブラウザを再読み込み（Ctrl + Shift + R）するか、新規試合ボタンをお試しください。</p>
         </div>
       `;
     }
