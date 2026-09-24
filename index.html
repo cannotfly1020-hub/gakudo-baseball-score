@@ -1,272 +1,80 @@
-/**
- * js/app.js
- * 学童野球 1球速報 アプリケーション・エントリーポイント（司令塔）
- * 全コンポーネントの初期化、新規試合安全リセット、 IndexedDB自動保存の統括
- */
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>学童野球 1球速報 - gakudo-baseball-score</title>
+  
+  <!-- ユーティリティCSS (Tailwind CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 分割CSSの読み込み -->
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
 
-import { GameState } from "./state.js";
-import { ScoreboardComponent } from "./components/scoreboard.js";
-import { RunnerDiamondComponent } from "./components/runnerDiamond.js";
-import { ZoneComponent } from "./components/zone.js";
-import { SprayModalComponent } from "./components/sprayModal.js";
-import { RosterViewComponent } from "./components/rosterView.js";
-import { dbStorage } from "./storage/indexedDb.js";
-import { DataExporter } from "./storage/exporter.js";
+<body class="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col items-center p-2 sm:p-3 bg-[#0b1329] text-slate-100 font-sans select-none justify-between">
 
-class AppController {
-  constructor() {
-    this.gameState = new GameState();
-    this.components = {};
-    this.isInitialized = false;
-  }
-
-  init() {
-    if (this.isInitialized) return;
-    this.isInitialized = true;
-
-    try {
-      this.initSynchronousUI();
-      this.bindGlobalEvents();
-      this.restoreSavedGame();
-    } catch (err) {
-      console.error("アプリケーション起動中にエラーが発生しました:", err);
-      this.showInitError(err);
-    }
-  }
-
-  initSynchronousUI() {
-    const scoreboardSlot = document.getElementById("scoreboard-slot");
-    const diamondSlot = document.getElementById("diamond-slot");
-    const zoneSlot = document.getElementById("zone-slot");
-    const sprayModalSlot = document.getElementById("spray-modal-slot");
-    const rosterModalSlot = document.getElementById("roster-modal-slot");
-
-    if (scoreboardSlot) {
-      this.components.scoreboard = new ScoreboardComponent(scoreboardSlot, this.gameState);
-    }
-
-    if (diamondSlot) {
-      this.components.diamond = new RunnerDiamondComponent(diamondSlot, this.gameState);
-    }
-
-    if (sprayModalSlot) {
-      this.components.sprayModal = new SprayModalComponent(sprayModalSlot, this.gameState);
-    }
-
-    if (zoneSlot) {
-      this.components.zone = new ZoneComponent(zoneSlot, this.gameState, {
-        onInPlay: (selectedCourse) => this.handleInPlay(selectedCourse)
-      });
-    }
-
-    if (rosterModalSlot) {
-      this.components.rosterView = new RosterViewComponent(rosterModalSlot, this.gameState);
-    }
-
-    // 1球記録ごとにIndexedDBへ自動保存
-    this.gameState.subscribe((state) => {
-      dbStorage.saveActiveGame(state);
-    });
-  }
-
-  bindGlobalEvents() {
-    // 1球取消（アンドゥ）
-    const btnUndo = document.getElementById("btn-undo");
-    if (btnUndo) {
-      btnUndo.addEventListener("click", (e) => {
-        e.preventDefault();
-        this.gameState.undo();
-      });
-    }
-
-    // 新規試合開始（安全確認モーダル）
-    const btnReset = document.getElementById("btn-reset-game");
-    if (btnReset) {
-      btnReset.addEventListener("click", (e) => {
-        e.preventDefault();
-        this.openResetConfirmModal();
-      });
-    }
-
-    // オーダー編成モーダル表示
-    const btnRoster = document.getElementById("btn-open-roster");
-    const rosterSlot = document.getElementById("roster-modal-slot");
-    if (btnRoster && rosterSlot) {
-      btnRoster.addEventListener("click", () => {
-        rosterSlot.classList.remove("hidden");
-        if (this.components.rosterView) {
-          this.components.rosterView.render();
-          this.components.rosterView.bindEvents();
-        }
-      });
-    }
-
-    // CSVエクスポート
-    const btnCsv = document.getElementById("btn-export-csv");
-    if (btnCsv) {
-      btnCsv.addEventListener("click", () => {
-        const state = this.gameState.getState();
-        DataExporter.exportGameCsv(state);
-      });
-    }
-
-    // PCキーボードショートカット (Ctrl + Z で1球取消)
-    window.addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        this.gameState.undo();
-      }
-    });
-  }
-
-  openResetConfirmModal() {
-    const modalSlot = document.getElementById("reset-modal-slot");
-    if (!modalSlot) return;
-
-    modalSlot.innerHTML = `
-      <div class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 select-none">
-        <div class="bg-slate-900 border border-rose-800/80 rounded-2xl p-4 w-full max-w-sm space-y-3 shadow-2xl">
-          <div class="flex items-center gap-2 text-rose-400 border-b border-slate-800 pb-2">
-            <span class="text-xl">⚠️</span>
-            <h3 class="text-sm font-black">試合データの初期化</h3>
-          </div>
-          
-          <p class="text-xs text-slate-300 leading-relaxed">
-            現在のスコア、投球数、全打席ログを消去して<strong class="text-amber-400">新しい試合を開始</strong>しますか？<br>
-            <span class="text-[10px] text-slate-400 block pt-1">※ 必要な場合は先に「📤 CSV」で保存してください。</span>
-          </p>
-
-          <div class="flex gap-2 pt-2 border-t border-slate-800">
-            <button type="button" id="btn-cancel-reset" class="w-1/2 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition">
-              キャンセル
-            </button>
-            <button type="button" id="btn-confirm-reset" class="w-1/2 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-xs shadow-lg transition">
-              クリアして新規試合
-            </button>
-          </div>
-        </div>
+  <!-- 1. アプリヘッダー (PCでは最大幅を広げて広々表示) -->
+  <header class="w-full max-w-lg lg:max-w-6xl mb-1.5 flex items-center justify-between border-b border-slate-800 pb-2 flex-shrink-0">
+    <div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-xl">⚾️</span>
+        <h1 class="text-base sm:text-lg font-bold text-emerald-400">学童野球 1球速報</h1>
+        <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700">v1.0</span>
       </div>
-    `;
-    modalSlot.classList.remove("hidden");
+      <p class="text-[10px] text-slate-400 hidden sm:block">gakudo-baseball-score</p>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <button id="btn-open-roster" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-sky-900/50 flex items-center gap-1 shadow">
+        📋 オーダー
+      </button>
+      <button id="btn-export-csv" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-emerald-900/50 flex items-center gap-1 shadow" title="公式スコアCSVを保存">
+        📤 CSV
+      </button>
+      <button id="btn-undo" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow">
+        ↺ 1球取消 <span class="hidden lg:inline text-[10px] opacity-80">(Ctrl+Z)</span>
+      </button>
+    </div>
+  </header>
 
-    const close = () => modalSlot.classList.add("hidden");
+  <!-- 2. メインコンテンツ: PCでは左右均等2カラム、スクロールなしフィット -->
+  <div class="w-full max-w-lg lg:max-w-6xl flex-1 flex flex-col lg:flex-row gap-3 items-stretch overflow-y-auto lg:overflow-hidden pb-1">
+    
+    <!-- 【左カラム】試合状況（スコアボード・走者BSO・直近投球ログ） -->
+    <div class="w-full lg:w-1/2 flex flex-col gap-2 justify-between">
+      <!-- スコアボード & 球数・タイマー管理 -->
+      <section id="scoreboard-slot" class="w-full">
+        <!-- scoreboard.js が描画 -->
+      </section>
 
-    modalSlot.querySelector("#btn-cancel-reset").addEventListener("click", close);
-    modalSlot.querySelector("#btn-confirm-reset").addEventListener("click", async () => {
-      // 1. IndexedDBのアクティブゲームを消去
-      await dbStorage.clearActiveGame();
-      // 2. GameStateを初期化して全画面へ通知
-      this.gameState.resetGame();
-      // 3. タイマーをリセット
-      if (this.components.scoreboard) {
-        this.components.scoreboard.resetTimer();
-      }
-      close();
-    });
-  }
+      <!-- 走者ダイアモンド & BSOカウントランプ -->
+      <section id="diamond-slot" class="w-full">
+        <!-- runnerDiamond.js が描画 -->
+      </section>
 
-  handleInPlay(selectedCourse) {
-    if (!this.components.sprayModal) return;
+      <!-- 直近投球ログスロット -->
+      <section id="log-slot" class="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 shadow text-xs flex-1 flex flex-col justify-center min-h-[70px]">
+        <!-- runnerDiamond.js が更新 -->
+      </section>
+    </div>
 
-    this.components.sprayModal.open({
-      course: selectedCourse,
-      onComplete: (playResult) => {
-        const state = this.gameState.getState();
-        const snapshot = JSON.parse(JSON.stringify(state));
+    <!-- 【右カラム】投球入力コンソール（17分割盤面 & 判定ボタン） -->
+    <div class="w-full lg:w-1/2 flex flex-col justify-center">
+      <main class="w-full">
+        <section id="zone-slot">
+          <!-- zone.js がプロ仕様コンソールを描画 -->
+        </section>
+      </main>
+    </div>
 
-        let runsScored = playResult.runs || 0;
-        let isOut = false;
+  </div>
 
-        // 打球結果に応じた走者とカウント処理
-        switch (playResult.type) {
-          case "単打":
-            if (state.runners[3]) { runsScored += 1; state.runners[3] = false; }
-            if (state.runners[2]) { state.runners[3] = true; state.runners[2] = false; }
-            if (state.runners[1]) { state.runners[2] = true; }
-            state.runners[1] = true;
-            break;
-          case "二塁打":
-            if (state.runners[3]) { runsScored += 1; state.runners[3] = false; }
-            if (state.runners[2]) { runsScored += 1; state.runners[2] = false; }
-            if (state.runners[1]) { state.runners[3] = true; state.runners[1] = false; }
-            state.runners[2] = true;
-            break;
-          case "三塁打":
-            if (state.runners[3]) runsScored += 1;
-            if (state.runners[2]) runsScored += 1;
-            if (state.runners[1]) runsScored += 1;
-            state.runners = { 1: false, 2: false, 3: true };
-            break;
-          case "本塁打":
-            runsScored += 1;
-            if (state.runners[1]) runsScored += 1;
-            if (state.runners[2]) runsScored += 1;
-            if (state.runners[3]) runsScored += 1;
-            state.runners = { 1: false, 2: false, 3: false };
-            break;
-          case "凡打":
-          case "犠牲フライ":
-          case "送りバント":
-            isOut = true;
-            break;
-          default:
-            break;
-        }
+  <!-- 3. モーダルスロット -->
+  <div id="spray-modal-slot" class="hidden"></div>
+  <div id="roster-modal-slot" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 p-3 overflow-y-auto flex items-center justify-center"></div>
 
-        if (runsScored > 0) {
-          this.gameState.addRun(runsScored);
-        }
-
-        const pitchEvent = {
-          pitchNum: state.pitchCount + 1,
-          inningStr: `${state.inning}回${state.isTop ? "表" : "裏"}`,
-          course: selectedCourse,
-          result: `打球 (${playResult.type})`,
-          bsoBefore: `${state.balls}-${state.strikes}-${state.outs}`,
-          play: playResult
-        };
-
-        state.pitchCount += 1;
-        state.history.push({ snapshot, pitchEvent });
-
-        if (isOut) {
-          this.gameState.handleOut();
-        }
-        this.gameState.resetCount();
-        this.gameState.notify();
-      }
-    });
-  }
-
-  async restoreSavedGame() {
-    try {
-      const savedState = await dbStorage.loadActiveGame();
-      if (savedState && savedState.history && savedState.history.length > 0) {
-        this.gameState.state = savedState;
-        this.gameState.notify();
-      }
-    } catch (err) {
-      console.warn("保存データの読み込みをスキップしました:", err);
-    }
-  }
-
-  showInitError(err) {
-    const mainSlot = document.querySelector("main");
-    if (mainSlot) {
-      mainSlot.innerHTML = `
-        <div class="bg-rose-950/80 border border-rose-700 text-rose-200 p-4 rounded-xl text-xs space-y-2">
-          <p class="font-bold">起動中にエラーが発生しました</p>
-          <p class="font-mono text-[11px]">${err.message}</p>
-        </div>
-      `;
-    }
-  }
-}
-
-const app = new AppController();
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => app.init());
-} else {
-  app.init();
-}
+  <!-- 4. ES Modules エントリーポイント -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
