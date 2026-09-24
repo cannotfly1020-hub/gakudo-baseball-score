@@ -1,12 +1,7 @@
 /**
  * js/app.js
- * アプリ全体の司令塔・エントリーポイント
- * 
- * 担当役割:
- * - 各コンポーネント（Scoreboard, RunnerDiamond, Zone）のインスタンス化
- * - 状態管理インスタンス（GameState）の生成と各部品への受け渡し
- * - ヘッダー操作（アンドゥ・1球取消）のバインド
- * - 打球モーダル起動時のインターフェース予約
+ * 学童野球 1球速報 アプリケーション・エントリーポイント（司令塔）
+ * 全コンポーネントの初期化、新規試合安全リセット、 IndexedDB自動保存の統括
  */
 
 import { GameState } from "./state.js";
@@ -18,114 +13,104 @@ import { RosterViewComponent } from "./components/rosterView.js";
 import { dbStorage } from "./storage/indexedDb.js";
 import { DataExporter } from "./storage/exporter.js";
 
-class BaseballApp {
+class AppController {
   constructor() {
-    this.gameState = null;
-    this.scoreboardComponent = null;
-    this.runnerDiamondComponent = null;
-    this.zoneComponent = null;
-    this.sprayModalComponent = null;
-    this.rosterViewComponent = null;
+    this.gameState = new GameState();
+    this.components = {};
+    this.isInitialized = false;
   }
 
-  /**
-   * アプリの初期化と全モジュール結合
-   */
-  async init() {
-    // 1. 状態管理（金庫）のインスタンス生成
-    this.gameState = new GameState();
+  init() {
+    if (this.isInitialized) return;
+    this.isInitialized = true;
 
-    // 2. オフラインDB（IndexedDB）から前回の進行中データを自動復元確認
     try {
-      const savedState = await dbStorage.loadActiveGame();
-      if (savedState && savedState.history && savedState.history.length > 0) {
-        this.gameState.state = savedState;
-        console.log("⚾️ 直前の試合データを復元しました");
-      }
-    } catch (e) {
-      console.warn("データ復元スキップ:", e);
+      this.initSynchronousUI();
+      this.bindGlobalEvents();
+      this.restoreSavedGame();
+    } catch (err) {
+      console.error("アプリケーション起動中にエラーが発生しました:", err);
+      this.showInitError(err);
     }
+  }
 
-    // 3. DOM要素の受け皿（スロット）を取得
+  initSynchronousUI() {
     const scoreboardSlot = document.getElementById("scoreboard-slot");
     const diamondSlot = document.getElementById("diamond-slot");
     const zoneSlot = document.getElementById("zone-slot");
     const sprayModalSlot = document.getElementById("spray-modal-slot");
-    const rosterSlot = document.getElementById("roster-modal-slot");
+    const rosterModalSlot = document.getElementById("roster-modal-slot");
 
-    // 4. 各コンポーネントの初期化
     if (scoreboardSlot) {
-      this.scoreboardComponent = new ScoreboardComponent(scoreboardSlot, this.gameState);
+      this.components.scoreboard = new ScoreboardComponent(scoreboardSlot, this.gameState);
     }
 
     if (diamondSlot) {
-      this.runnerDiamondComponent = new RunnerDiamondComponent(diamondSlot, this.gameState);
+      this.components.diamond = new RunnerDiamondComponent(diamondSlot, this.gameState);
     }
 
     if (sprayModalSlot) {
-      this.sprayModalComponent = new SprayModalComponent(sprayModalSlot, this.gameState);
-    }
-
-    if (rosterSlot) {
-      this.rosterViewComponent = new RosterViewComponent(rosterSlot, this.gameState);
+      this.components.sprayModal = new SprayModalComponent(sprayModalSlot, this.gameState);
     }
 
     if (zoneSlot) {
-      this.zoneComponent = new ZoneComponent(zoneSlot, this.gameState, {
+      this.components.zone = new ZoneComponent(zoneSlot, this.gameState, {
         onInPlay: (selectedCourse) => this.handleInPlay(selectedCourse)
       });
     }
 
-    // 5. 1球ごとの完全オフライン自動保存リスナーを登録
+    if (rosterModalSlot) {
+      this.components.rosterView = new RosterViewComponent(rosterModalSlot, this.gameState);
+    }
+
+    // 1球記録ごとにIndexedDBへ自動保存
     this.gameState.subscribe((state) => {
       dbStorage.saveActiveGame(state);
     });
-
-    // 6. グローバル操作（ヘッダーのアンドゥ、オーダー、CSV出力）をバインド
-    this.bindGlobalActions();
-
-    // 7. 初期描画を全コンポーネントへ通知
-    this.gameState.notify();
-
-    console.log("⚾️ gakudo-baseball-score 全モジュール連携完了");
   }
 
-  /**
-   * ヘッダーや共通ボタンのイベント登録
-   */
-  bindGlobalActions() {
-    // ヘッダーの「1球取消」ボタン
-    const undoBtn = document.getElementById("btn-undo");
-    if (undoBtn) {
-      undoBtn.addEventListener("click", (e) => {
+  bindGlobalEvents() {
+    // 1球取消（アンドゥ）
+    const btnUndo = document.getElementById("btn-undo");
+    if (btnUndo) {
+      btnUndo.addEventListener("click", (e) => {
         e.preventDefault();
         this.gameState.undo();
       });
     }
 
-    // オーダー・名簿モーダルの開閉
-    const rosterBtn = document.getElementById("btn-open-roster");
+    // 新規試合開始（安全確認モーダル）
+    const btnReset = document.getElementById("btn-reset-game");
+    if (btnReset) {
+      btnReset.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.openResetConfirmModal();
+      });
+    }
+
+    // オーダー編成モーダル表示
+    const btnRoster = document.getElementById("btn-open-roster");
     const rosterSlot = document.getElementById("roster-modal-slot");
-    if (rosterBtn && rosterSlot) {
-      rosterBtn.addEventListener("click", () => {
-        rosterSlot.classList.toggle("hidden");
+    if (btnRoster && rosterSlot) {
+      btnRoster.addEventListener("click", () => {
+        rosterSlot.classList.remove("hidden");
+        if (this.components.rosterView) {
+          this.components.rosterView.render();
+          this.components.rosterView.bindEvents();
+        }
       });
     }
 
-    // CSVエクスポートボタン
-    const exportBtn = document.getElementById("btn-export-csv");
-    if (exportBtn) {
-      exportBtn.addEventListener("click", () => {
+    // CSVエクスポート
+    const btnCsv = document.getElementById("btn-export-csv");
+    if (btnCsv) {
+      btnCsv.addEventListener("click", () => {
         const state = this.gameState.getState();
-        DataExporter.exportGameCsv({
-          date: new Date().toISOString().slice(0, 10),
-          opponent: "相手チーム",
-          history: state.history
-        });
+        DataExporter.exportGameCsv(state);
       });
     }
 
-    // キーボードショートカット（Ctrl+Z / Cmd+Z で1球取消）
+    // PCキーボードショートカット (Ctrl + Z で1球取消)
     window.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -134,124 +119,154 @@ class BaseballApp {
     });
   }
 
-  /**
-   * 打球結果ボタン（インプレー）タップ時: 打球Canvasモーダルを起動
-   * @param {string} course 選択中の投球コース
-   */
-  handleInPlay(course) {
-    if (!this.sprayModalComponent) return;
+  openResetConfirmModal() {
+    const modalSlot = document.getElementById("reset-modal-slot");
+    if (!modalSlot) return;
 
-    this.sprayModalComponent.open({
-      course: course,
+    modalSlot.innerHTML = `
+      <div class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 select-none">
+        <div class="bg-slate-900 border border-rose-800/80 rounded-2xl p-4 w-full max-w-sm space-y-3 shadow-2xl">
+          <div class="flex items-center gap-2 text-rose-400 border-b border-slate-800 pb-2">
+            <span class="text-xl">⚠️</span>
+            <h3 class="text-sm font-black">試合データの初期化</h3>
+          </div>
+          
+          <p class="text-xs text-slate-300 leading-relaxed">
+            現在のスコア、投球数、全打席ログを消去して<strong class="text-amber-400">新しい試合を開始</strong>しますか？<br>
+            <span class="text-[10px] text-slate-400 block pt-1">※ 必要な場合は先に「📤 CSV」で保存してください。</span>
+          </p>
+
+          <div class="flex gap-2 pt-2 border-t border-slate-800">
+            <button type="button" id="btn-cancel-reset" class="w-1/2 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition">
+              キャンセル
+            </button>
+            <button type="button" id="btn-confirm-reset" class="w-1/2 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-xs shadow-lg transition">
+              クリアして新規試合
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    modalSlot.classList.remove("hidden");
+
+    const close = () => modalSlot.classList.add("hidden");
+
+    modalSlot.querySelector("#btn-cancel-reset").addEventListener("click", close);
+    modalSlot.querySelector("#btn-confirm-reset").addEventListener("click", async () => {
+      // 1. IndexedDBのアクティブゲームを消去
+      await dbStorage.clearActiveGame();
+      // 2. GameStateを初期化して全画面へ通知
+      this.gameState.resetGame();
+      // 3. タイマーをリセット
+      if (this.components.scoreboard) {
+        this.components.scoreboard.resetTimer();
+      }
+      close();
+    });
+  }
+
+  handleInPlay(selectedCourse) {
+    if (!this.components.sprayModal) return;
+
+    this.components.sprayModal.open({
+      course: selectedCourse,
       onComplete: (playResult) => {
-        this.processPlayResult(playResult);
+        const state = this.gameState.getState();
+        const snapshot = JSON.parse(JSON.stringify(state));
+
+        let runsScored = playResult.runs || 0;
+        let isOut = false;
+
+        // 打球結果に応じた走者とカウント処理
+        switch (playResult.type) {
+          case "単打":
+            if (state.runners[3]) { runsScored += 1; state.runners[3] = false; }
+            if (state.runners[2]) { state.runners[3] = true; state.runners[2] = false; }
+            if (state.runners[1]) { state.runners[2] = true; }
+            state.runners[1] = true;
+            break;
+          case "二塁打":
+            if (state.runners[3]) { runsScored += 1; state.runners[3] = false; }
+            if (state.runners[2]) { runsScored += 1; state.runners[2] = false; }
+            if (state.runners[1]) { state.runners[3] = true; state.runners[1] = false; }
+            state.runners[2] = true;
+            break;
+          case "三塁打":
+            if (state.runners[3]) runsScored += 1;
+            if (state.runners[2]) runsScored += 1;
+            if (state.runners[1]) runsScored += 1;
+            state.runners = { 1: false, 2: false, 3: true };
+            break;
+          case "本塁打":
+            runsScored += 1;
+            if (state.runners[1]) runsScored += 1;
+            if (state.runners[2]) runsScored += 1;
+            if (state.runners[3]) runsScored += 1;
+            state.runners = { 1: false, 2: false, 3: false };
+            break;
+          case "凡打":
+          case "犠牲フライ":
+          case "送りバント":
+            isOut = true;
+            break;
+          default:
+            break;
+        }
+
+        if (runsScored > 0) {
+          this.gameState.addRun(runsScored);
+        }
+
+        const pitchEvent = {
+          pitchNum: state.pitchCount + 1,
+          inningStr: `${state.inning}回${state.isTop ? "表" : "裏"}`,
+          course: selectedCourse,
+          result: `打球 (${playResult.type})`,
+          bsoBefore: `${state.balls}-${state.strikes}-${state.outs}`,
+          play: playResult
+        };
+
+        state.pitchCount += 1;
+        state.history.push({ snapshot, pitchEvent });
+
+        if (isOut) {
+          this.gameState.handleOut();
+        }
+        this.gameState.resetCount();
+        this.gameState.notify();
       }
     });
   }
 
-  /**
-   * 打球モーダルから返却された打球結果を状態に反映
-   * @param {Object} playResult { course, type, quality, runs, area, hitCoord }
-   */
-  processPlayResult(playResult) {
-    const state = this.gameState.getState();
-    const snapshot = JSON.parse(JSON.stringify(state));
-
-    state.pitchCount += 1;
-
-    // 打球種別によるアウト・進塁・得点ロジック
-    const type = playResult.type;
-    const runsFromPlay = playResult.runs || 0;
-
-    switch (type) {
-      case "凡打":
-      case "犠牲フライ":
-        this.gameState.handleOut();
-        break;
-
-      case "単打":
-      case "失策":
-      case "野選":
-      case "振り逃げ":
-        this.gameState.advanceWalk();
-        break;
-
-      case "二塁打":
-        // 2塁打: 2塁・3塁走者は生還、1塁走者は3塁へ、打者は2塁へ
-        if (state.runners[3]) this.gameState.addRun(1);
-        if (state.runners[2]) this.gameState.addRun(1);
-        state.runners[3] = state.runners[1] || false;
-        state.runners[2] = true;
-        state.runners[1] = false;
-        break;
-
-      case "三塁打":
-        // 3塁打: 走者一掃
-        let tripleRuns = 0;
-        if (state.runners[1]) tripleRuns++;
-        if (state.runners[2]) tripleRuns++;
-        if (state.runners[3]) tripleRuns++;
-        if (tripleRuns > 0) this.gameState.addRun(tripleRuns);
-        state.runners = { 1: false, 2: false, 3: true };
-        break;
-
-      case "本塁打":
-        // 本塁打: 走者全員生還 ＋ 打者得点
-        let hrRuns = 1;
-        if (state.runners[1]) hrRuns++;
-        if (state.runners[2]) hrRuns++;
-        if (state.runners[3]) hrRuns++;
-        state.runners = { 1: false, 2: false, 3: false };
-        this.gameState.addRun(hrRuns);
-        break;
-
-      case "送りバント":
-      case "スクイズ":
-        // 走者1つ進塁 ＋ 打者アウト
-        this.gameState.handleOut();
-        if (state.runners[3]) {
-          state.runners[3] = false;
-          this.gameState.addRun(1);
-        }
-        if (state.runners[2]) {
-          state.runners[3] = true;
-          state.runners[2] = false;
-        }
-        if (state.runners[1]) {
-          state.runners[2] = true;
-          state.runners[1] = false;
-        }
-        break;
-
-      default:
-        break;
+  async restoreSavedGame() {
+    try {
+      const savedState = await dbStorage.loadActiveGame();
+      if (savedState && savedState.history && savedState.history.length > 0) {
+        this.gameState.state = savedState;
+        this.gameState.notify();
+      }
+    } catch (err) {
+      console.warn("保存データの読み込みをスキップしました:", err);
     }
+  }
 
-    // ユーザー指定の追加得点がある場合
-    if (runsFromPlay > 0 && type !== "本塁打") {
-      this.gameState.addRun(runsFromPlay);
+  showInitError(err) {
+    const mainSlot = document.querySelector("main");
+    if (mainSlot) {
+      mainSlot.innerHTML = `
+        <div class="bg-rose-950/80 border border-rose-700 text-rose-200 p-4 rounded-xl text-xs space-y-2">
+          <p class="font-bold">起動中にエラーが発生しました</p>
+          <p class="font-mono text-[11px]">${err.message}</p>
+        </div>
+      `;
     }
-
-    // 打者完了のためBSOカウントをリセット
-    this.gameState.resetCount();
-
-    // 1球履歴レコードの構築（CSV/JSON保存用）
-    const pitchEvent = {
-      pitchNum: state.pitchCount,
-      inningStr: `${state.inning}回${state.isTop ? "表" : "裏"}`,
-      course: playResult.course,
-      result: `打球 (${type})`,
-      play: playResult,
-      bsoBefore: `${snapshot.balls}-${snapshot.strikes}-${snapshot.outs}`
-    };
-
-    state.history.push({ snapshot, pitchEvent });
-    this.gameState.notify();
   }
 }
 
-// DOMContentLoaded のタイミングで起動
-document.addEventListener("DOMContentLoaded", () => {
-  const app = new BaseballApp();
+const app = new AppController();
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => app.init());
+} else {
   app.init();
-});
+}
