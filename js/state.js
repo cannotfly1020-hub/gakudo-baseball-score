@@ -6,6 +6,12 @@
 
 export class GameState {
   constructor() {
+    this.initDefaultState();
+    this.listeners = [];
+  }
+
+  // 初期状態の設定（新規試合リセット時にも再利用可能）
+  initDefaultState() {
     this.state = {
       // カウント
       balls: 0,
@@ -13,10 +19,11 @@ export class GameState {
       outs: 0,
 
       // イニング・得点（各イニングのindex = イニング番号 - 1）
+      // 1回表・裏ともに初期値0で配列を揃えておくことでインデックスズレを防止
       inning: 1,
       isTop: true, // true: 表 (先攻), false: 裏 (後攻)
       awayScore: [0], // 先攻得点
-      homeScore: [],  // 後攻得点（1回裏開始時に[0]になる）
+      homeScore: [0], // 後攻得点
 
       // 球数・タイマー設定
       pitchCount: 0,
@@ -40,8 +47,6 @@ export class GameState {
       // 1球ごとの全投球ログ
       history: []
     };
-
-    this.listeners = [];
   }
 
   subscribe(listener) {
@@ -128,7 +133,7 @@ export class GameState {
     }
   }
 
-  // 攻守交代処理（得点配列の二重追加を解消）
+  // 攻守交代処理（イニング配列を確実に初期化）
   handleSideRetired() {
     this.state.balls = 0;
     this.state.strikes = 0;
@@ -140,16 +145,22 @@ export class GameState {
       this.state.inning += 1;
       this.state.isTop = true;
       const idx = this.state.inning - 1;
-      if (this.state.awayScore[idx] === undefined) {
-        this.state.awayScore[idx] = 0;
-      }
+      this.ensureScoreArrayCapacity(idx);
     } else {
       // 表が終わったら裏へ
       this.state.isTop = false;
       const idx = this.state.inning - 1;
-      if (this.state.homeScore[idx] === undefined) {
-        this.state.homeScore[idx] = 0;
-      }
+      this.ensureScoreArrayCapacity(idx);
+    }
+  }
+
+  // 配列の指定インデックスまで0で埋める安全関数
+  ensureScoreArrayCapacity(targetIdx) {
+    while (this.state.awayScore.length <= targetIdx) {
+      this.state.awayScore.push(0);
+    }
+    while (this.state.homeScore.length <= targetIdx) {
+      this.state.homeScore.push(0);
     }
   }
 
@@ -165,20 +176,55 @@ export class GameState {
     }
   }
 
-  // 現在のイニングに対して厳密に得点を加算
+  // 現在のイニングに対して得点を加算
   addRun(points = 1) {
     const idx = this.state.inning - 1;
+    this.ensureScoreArrayCapacity(idx);
+
     if (this.state.isTop) {
-      while (this.state.awayScore.length <= idx) {
-        this.state.awayScore.push(0);
-      }
       this.state.awayScore[idx] = (this.state.awayScore[idx] || 0) + points;
     } else {
-      while (this.state.homeScore.length <= idx) {
-        this.state.homeScore.push(0);
-      }
       this.state.homeScore[idx] = (this.state.homeScore[idx] || 0) + points;
     }
+    this.notify();
+  }
+
+  // リカバリー用: 任意のイニング・チームのスコアを直接変更
+  setScore(isTop, inningIdx, score) {
+    this.ensureScoreArrayCapacity(inningIdx);
+    const parsed = Math.max(0, parseInt(score, 10) || 0);
+    if (isTop) {
+      this.state.awayScore[inningIdx] = parsed;
+    } else {
+      this.state.homeScore[inningIdx] = parsed;
+    }
+    this.notify();
+  }
+
+  // リカバリー用: BSO・球数・イニングの直接補正
+  setCount(type, val) {
+    if (["balls", "strikes", "outs"].includes(type)) {
+      this.state[type] = Math.max(0, parseInt(val, 10) || 0);
+      this.notify();
+    }
+  }
+
+  setPitchCount(count) {
+    this.state.pitchCount = Math.max(0, parseInt(count, 10) || 0);
+    this.notify();
+  }
+
+  setInning(inning, isTop) {
+    this.state.inning = Math.max(1, parseInt(inning, 10) || 1);
+    this.state.isTop = !!isTop;
+    this.ensureScoreArrayCapacity(this.state.inning - 1);
+    this.notify();
+  }
+
+  // 新規試合開始（完全初期化）
+  resetGame() {
+    this.initDefaultState();
+    this.notify();
   }
 
   resetCount() {
