@@ -65,7 +65,11 @@ class AppController {
 
     // 1球記録ごとにIndexedDBへ自動保存
     this.gameState.subscribe((state) => {
-      dbStorage.saveActiveGame(state);
+      try {
+        dbStorage.saveActiveGame(state);
+      } catch (e) {
+        console.warn("自動保存スキップ:", e);
+      }
     });
   }
 
@@ -120,8 +124,12 @@ class AppController {
   }
 
   openResetConfirmModal() {
-    const modalSlot = document.getElementById("reset-modal-slot");
-    if (!modalSlot) return;
+    let modalSlot = document.getElementById("reset-modal-slot");
+    if (!modalSlot) {
+      modalSlot = document.createElement("div");
+      modalSlot.id = "reset-modal-slot";
+      document.body.appendChild(modalSlot);
+    }
 
     modalSlot.innerHTML = `
       <div class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 select-none">
@@ -151,18 +159,29 @@ class AppController {
 
     const close = () => modalSlot.classList.add("hidden");
 
-    modalSlot.querySelector("#btn-cancel-reset").addEventListener("click", close);
-    modalSlot.querySelector("#btn-confirm-reset").addEventListener("click", async () => {
-      // 1. IndexedDBのアクティブゲームを消去
-      await dbStorage.clearActiveGame();
-      // 2. GameStateを初期化して全画面へ通知
-      this.gameState.resetGame();
-      // 3. タイマーをリセット
-      if (this.components.scoreboard) {
-        this.components.scoreboard.resetTimer();
-      }
-      close();
-    });
+    const cancelBtn = modalSlot.querySelector("#btn-cancel-reset");
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", close);
+    }
+
+    const confirmBtn = modalSlot.querySelector("#btn-confirm-reset");
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", async () => {
+        try {
+          // 1. IndexedDBのアクティブゲームを消去
+          await dbStorage.clearActiveGame();
+        } catch (e) {
+          console.warn("DBクリア警告:", e);
+        }
+        // 2. GameStateを初期化して全画面へ通知
+        this.gameState.resetGame();
+        // 3. タイマーをリセット
+        if (this.components.scoreboard) {
+          this.components.scoreboard.resetTimer();
+        }
+        close();
+      });
+    }
   }
 
   handleInPlay(selectedCourse) {
