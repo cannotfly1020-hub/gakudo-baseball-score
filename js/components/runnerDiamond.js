@@ -3,7 +3,7 @@
  * 走者ダイアモンド ＆ BSOランプコンポーネント
  * 
  * 担当役割:
- * - BSOランプ（ボール:緑3 / ストライク:黄2 / アウト:赤2）の点灯管理 ＆ 直接タップ補正
+ * - BSOランプ（ボール:緑3 / ストライク:黄2 / アウト:赤2）の点灯管理
  * - 走者ダイアモンド（SVG）の描画および各塁（1〜3塁）のワンタップ在塁トグル
  * - 現在の打者・投手情報の表示
  * - 走塁・野手イベントボタン（盗塁、盗塁刺、暴投進塁、牽制死）の発火
@@ -11,6 +11,11 @@
  */
 
 export class RunnerDiamondComponent {
+  /**
+   * @param {HTMLElement} containerElement 描画対象の親要素 (#diamond-slot)
+   * @param {GameState} gameState 試合状態管理インスタンス
+   * @param {Object} options オプション設定
+   */
   constructor(containerElement, gameState, options = {}) {
     this.container = containerElement;
     this.gameState = gameState;
@@ -24,10 +29,12 @@ export class RunnerDiamondComponent {
     this.render();
     this.bindEvents();
 
+    // GameState の変更通知を受け取ってUIをリアルタイム更新
     this.gameState.subscribe((state) => {
       this.update(state);
     });
 
+    // 初期状態を反映
     this.update(this.gameState.getState());
   }
 
@@ -35,26 +42,26 @@ export class RunnerDiamondComponent {
     this.container.innerHTML = `
       <div class="diamond-panel select-none">
         
-        <!-- 左側: BSOカウントランプ群（タップして直接カウント補正可能） -->
-        <div class="bso-group cursor-pointer" title="タップしてカウントを直接補正">
+        <!-- 左側: BSOカウントランプ群 -->
+        <div class="bso-group">
           <!-- ボール (B) -->
-          <div class="bso-row hover:bg-slate-800/40 p-0.5 rounded transition" id="row-bso-b">
-            <span class="bso-label text-emerald-400 font-black">B</span>
+          <div class="bso-row">
+            <span class="bso-label text-emerald-400">B</span>
             <div id="lamp-b1" class="lamp"></div>
             <div id="lamp-b2" class="lamp"></div>
             <div id="lamp-b3" class="lamp"></div>
           </div>
           
           <!-- ストライク (S) -->
-          <div class="bso-row hover:bg-slate-800/40 p-0.5 rounded transition" id="row-bso-s">
-            <span class="bso-label text-yellow-400 font-black">S</span>
+          <div class="bso-row">
+            <span class="bso-label text-yellow-400">S</span>
             <div id="lamp-s1" class="lamp"></div>
             <div id="lamp-s2" class="lamp"></div>
           </div>
           
           <!-- アウト (O) -->
-          <div class="bso-row hover:bg-slate-800/40 p-0.5 rounded transition" id="row-bso-o">
-            <span class="bso-label text-rose-500 font-black">O</span>
+          <div class="bso-row">
+            <span class="bso-label text-rose-500">O</span>
             <div id="lamp-o1" class="lamp"></div>
             <div id="lamp-o2" class="lamp"></div>
           </div>
@@ -131,13 +138,6 @@ export class RunnerDiamondComponent {
       });
     });
 
-    const rowB = this.container.querySelector("#row-bso-b");
-    const rowS = this.container.querySelector("#row-bso-s");
-    const rowO = this.container.querySelector("#row-bso-o");
-    if (rowB) rowB.addEventListener("click", () => this.gameState.cycleCount("B"));
-    if (rowS) rowS.addEventListener("click", () => this.gameState.cycleCount("S"));
-    if (rowO) rowO.addEventListener("click", () => this.gameState.cycleCount("O"));
-
     // 走塁イベントボタン群の紐付け
     const bindBtn = (id, handler) => {
       const el = this.container.querySelector(`#${id}`);
@@ -188,7 +188,7 @@ export class RunnerDiamondComponent {
       pitcherEl.textContent = state.currentPitcher.name;
     }
 
-    // 4. 直近投球ログの更新
+    // 4. 直近投球ログの更新（#log-slot が存在する場合）
     this.renderLog(state);
   }
 
@@ -214,6 +214,7 @@ export class RunnerDiamondComponent {
       return;
     }
 
+    // 直近5件を逆順（最新が上）で表示
     const recent = state.history.slice(-5).reverse();
     this.logContainer.innerHTML = `
       <div class="flex items-center justify-between border-b border-slate-800 pb-1 mb-1.5">
@@ -254,8 +255,10 @@ export class RunnerDiamondComponent {
     this.gameState.notify();
   }
 
+  // 盗塁成功処理
   handleSteal() {
     this.recordRunnerAction("盗塁成功", (state) => {
+      // 2塁走者がいて3塁空きなら3盗、1塁走者がいて2塁空きなら2盗
       if (state.runners[2] && !state.runners[3]) {
         state.runners[3] = true;
         state.runners[2] = false;
@@ -266,6 +269,7 @@ export class RunnerDiamondComponent {
     });
   }
 
+  // 盗塁刺処理（進塁先の走者を消去し1アウト追加）
   handleCaughtStealing() {
     this.recordRunnerAction("盗塁刺（アウト）", (state) => {
       if (state.runners[2]) {
@@ -279,6 +283,7 @@ export class RunnerDiamondComponent {
     });
   }
 
+  // 暴投進塁処理（各走者が1つ進塁、3塁走者は生還得点）
   handleWildPitchAdvance() {
     this.recordRunnerAction("暴投進塁", (state) => {
       if (state.runners[3]) {
@@ -296,6 +301,7 @@ export class RunnerDiamondComponent {
     });
   }
 
+  // 牽制死処理（走者消去し1アウト追加）
   handlePickoff() {
     this.recordRunnerAction("牽制死", (state) => {
       if (state.runners[1]) {
