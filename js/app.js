@@ -196,9 +196,10 @@ class BaseballApp {
     const snapshot = this.gameState.createSnapshot();
 
     state.pitchCount += 1;
+    // 登板中投手の投球数を加算
+    this.gameState.incrementCurrentPitcherCount();
 
     // 打席完了に伴い、攻撃チームの打順を自動送り（1番〜9番ループ）
-    // 3アウトチェンジが発生した場合でも、次イニングの先頭打者が正しく保存されます
     this.gameState.advanceBatter();
 
     const type = playResult.type;
