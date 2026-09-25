@@ -16,9 +16,11 @@
 
 <body class="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col items-center p-2 sm:p-3 bg-[#0b1329] text-slate-100 font-sans select-none justify-between">
 
+<!-- ... existing code ... -->
   <!-- 1. アプリヘッダー (PCでは最大幅を広げて広々表示) -->
-  <header class="w-full max-w-lg lg:max-w-6xl mb-1.5 flex items-center justify-between border-b border-slate-800 pb-2 flex-shrink-0">
-    <div>
+  <header class="w-full max-w-lg lg:max-w-6xl mb-2 flex flex-col gap-2 border-b border-slate-800 pb-2 flex-shrink-0">
+    <!-- 上段：タイトル＆バージョン -->
+    <div class="flex items-center justify-between">
       <div class="flex items-center gap-1.5">
         <span class="text-xl">⚾️</span>
         <h1 class="text-base sm:text-lg font-bold text-emerald-400">学童野球 1球速報</h1>
@@ -26,22 +28,24 @@
       </div>
       <p class="text-[10px] text-slate-400 hidden sm:block">gakudo-baseball-score</p>
     </div>
-    <div class="flex items-center gap-1.5">
-      <button id="btn-open-roster" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-sky-900/50 flex items-center gap-1 shadow">
+
+    <!-- 下段：4等分均等アクションボタン（高さ・余白を完全統一） -->
+    <div class="grid grid-cols-4 gap-1.5 w-full">
+      <button id="btn-open-roster" type="button" class="h-9 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1 shadow transition">
         📋 オーダー
       </button>
-      <button id="btn-export-csv" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-emerald-900/50 flex items-center gap-1 shadow" title="公式スコアCSVを保存">
+      <button id="btn-export-csv" type="button" class="h-9 bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-900/50 flex items-center justify-center gap-1 shadow transition" title="公式スコアCSVを保存">
         📤 CSV
       </button>
-      <button id="btn-undo" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow">
-        ↺ 1球取消 <span class="hidden lg:inline text-[10px] opacity-80">(Ctrl+Z)</span>
-         </button>
-    　<button id="btn-reset-game" class="bg-rose-950/80 hover:bg-rose-900 border border-rose-800 active:scale-95 text-rose-300 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow" title="試合を最初からやり直す">
- 　　　 🗑 リセット
-　　　</button>
+      <button id="btn-undo" type="button" class="h-9 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1 shadow transition">
+        ↺ 1球取消
+      </button>
+      <button id="btn-reset-game" type="button" class="h-9 bg-rose-950/80 hover:bg-rose-900 active:scale-95 text-rose-300 text-xs font-bold rounded-lg border border-rose-800 flex items-center justify-center gap-1 shadow transition" title="試合を最初からやり直す">
+        🗑 リセット
+      </button>
     </div>
   </header>
-
+<!-- ... existing code ... -->
   <!-- 2. メインコンテンツ: PCでは左右均等2カラム、スクロールなしフィット -->
   <div class="w-full max-w-lg lg:max-w-6xl flex-1 flex flex-col lg:flex-row gap-3 items-stretch overflow-y-auto lg:overflow-hidden pb-1">
     
