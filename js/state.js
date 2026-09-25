@@ -16,6 +16,13 @@ export class GameState {
 
   // 初期状態の設定
   initDefaultState() {
+    const defaultPositions = ["投", "捕", "一", "二", "三", "遊", "左", "中", "右"];
+    const createRoster = (teamPrefix) => defaultPositions.map((pos, idx) => ({
+      order: idx + 1,
+      name: `${idx + 1}番 打者`,
+      pos: pos
+    }));
+
     this.state = {
       // カウント
       balls: 0,
@@ -43,12 +50,30 @@ export class GameState {
         3: false
       },
 
+      // チーム情報 ＆ 9人打順オーダー
+      teams: {
+        away: {
+          name: "先攻チーム",
+          currentBatterIndex: 0, // 0〜8 (1番〜9番)
+          pitcher: { name: "先発 投手", number: 1 },
+          roster: createRoster("先攻")
+        },
+        home: {
+          name: "後攻チーム",
+          currentBatterIndex: 0,
+          pitcher: { name: "相手 投手", number: 1 },
+          roster: createRoster("後攻")
+        }
+      },
+
       currentBatter: { name: "1番 打者", order: 1, pos: "投" },
-      currentPitcher: { name: "先発 投手" },
+      currentPitcher: { name: "相手 投手" },
 
       // 1球ごとのログ（履歴自身はスナップショットから除外）
       history: []
     };
+
+    this.syncCurrentMatchup();
   }
 
   subscribe(listener) {
@@ -88,6 +113,18 @@ export class GameState {
         1: this.state.runners[1],
         2: this.state.runners[2],
         3: this.state.runners[3]
+      },
+      teams: {
+        away: {
+          ...this.state.teams.away,
+          currentBatterIndex: this.state.teams.away.currentBatterIndex,
+          pitcher: { ...this.state.teams.away.pitcher }
+        },
+        home: {
+          ...this.state.teams.home,
+          currentBatterIndex: this.state.teams.home.currentBatterIndex,
+          pitcher: { ...this.state.teams.home.pitcher }
+        }
       },
       currentBatter: { ...this.state.currentBatter },
       currentPitcher: { ...this.state.currentPitcher }
@@ -136,6 +173,7 @@ export class GameState {
     } else {
       this.advanceWalk();
       this.resetCount();
+      this.advanceBatter(); // 四球で打席完了 → 次の打者へ
     }
   }
 
@@ -143,6 +181,7 @@ export class GameState {
     if (this.state.strikes < 2) {
       this.state.strikes += 1;
     } else {
+      this.advanceBatter(); // 三振で打席完了 → 次の打者へ
       this.handleOut();
       this.resetCount();
     }
@@ -157,6 +196,7 @@ export class GameState {
   handleHitByPitch() {
     this.advanceWalk();
     this.resetCount();
+    this.advanceBatter(); // 死球で打席完了 → 次の打者へ
   }
 
   handleOut() {
@@ -181,6 +221,46 @@ export class GameState {
       this.state.isTop = false;
       this.ensureScoreArrayCapacity(this.state.inning - 1);
     }
+
+    // 攻守交替に伴い、打者・投手を自動切り替え
+    this.syncCurrentMatchup();
+  }
+
+  /**
+   * 現在のイニング（表/裏）に応じて対戦選手（打者と投手）を同期
+   * - 表（先攻攻撃）: 先攻の現在打者 vs 後攻の投手
+   * - 裏（後攻攻撃）: 後攻の現在打者 vs 先攻の投手
+   */
+  syncCurrentMatchup() {
+    if (!this.state.teams) return;
+
+    const battingTeam = this.state.isTop ? this.state.teams.away : this.state.teams.home;
+    const fieldingTeam = this.state.isTop ? this.state.teams.home : this.state.teams.away;
+
+    const bIdx = battingTeam.currentBatterIndex || 0;
+    const currentRosterBatter = battingTeam.roster && battingTeam.roster[bIdx]
+      ? battingTeam.roster[bIdx]
+      : { order: bIdx + 1, name: `${bIdx + 1}番 打者`, pos: "打" };
+
+    this.state.currentBatter = {
+      order: currentRosterBatter.order || (bIdx + 1),
+      name: currentRosterBatter.name,
+      pos: currentRosterBatter.pos || "打"
+    };
+
+    this.state.currentPitcher = {
+      name: fieldingTeam.pitcher ? fieldingTeam.pitcher.name : `${fieldingTeam.name} 投手`
+    };
+  }
+
+  /**
+   * 現在攻撃チームの打順を1つ進める（1番〜9番ループ）
+   */
+  advanceBatter() {
+    if (!this.state.teams) return;
+    const battingTeam = this.state.isTop ? this.state.teams.away : this.state.teams.home;
+    battingTeam.currentBatterIndex = ((battingTeam.currentBatterIndex || 0) + 1) % 9;
+    this.syncCurrentMatchup();
   }
 
   ensureScoreArrayCapacity(targetIdx) {
@@ -243,6 +323,7 @@ export class GameState {
     this.state.inning = Math.max(1, parseInt(inning, 10) || 1);
     this.state.isTop = !!isTop;
     this.ensureScoreArrayCapacity(this.state.inning - 1);
+    this.syncCurrentMatchup();
     this.notify();
   }
 
