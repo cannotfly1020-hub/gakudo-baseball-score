@@ -125,6 +125,53 @@ class BaseballApp {
       });
     }
 
+    // --- 試合リセット確認モーダルの制御 ---
+    const resetOpenBtn = document.getElementById("btn-reset-game");
+    const resetModal = document.getElementById("reset-confirm-modal");
+    const resetCancelBtn = document.getElementById("btn-cancel-reset");
+    const resetConfirmBtn = document.getElementById("btn-confirm-reset");
+
+    // リセットボタン押下時: 確認モーダルを表示
+    if (resetOpenBtn && resetModal) {
+      resetOpenBtn.addEventListener("click", () => {
+        resetModal.classList.remove("hidden");
+      });
+    }
+
+    // キャンセルボタン押下時: モーダルを閉じる
+    if (resetCancelBtn && resetModal) {
+      resetCancelBtn.addEventListener("click", () => {
+        resetModal.classList.add("hidden");
+      });
+    }
+
+    // モーダルの背景黒部分タップでもキャンセル
+    if (resetModal) {
+      resetModal.addEventListener("click", (e) => {
+        if (e.target === resetModal) {
+          resetModal.classList.add("hidden");
+        }
+      });
+    }
+
+    // 確定ボタン押下時: 試合データを初期化してIndexedDBに即時同期
+    if (resetConfirmBtn && resetModal) {
+      resetConfirmBtn.addEventListener("click", () => {
+        // 1. メモリ上の試合状態・履歴を完全初期化
+        this.gameState.resetGame();
+
+        // 2. データベース（IndexedDB）の保存領域も白紙状態に即座に同期
+        try {
+          dbStorage.saveActiveGame(this.gameState.getState());
+        } catch (err) {
+          console.warn("リセット時のDB保存スキップ:", err);
+        }
+
+        // 3. モーダルを閉じる
+        resetModal.classList.add("hidden");
+      });
+    }
+
     window.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
