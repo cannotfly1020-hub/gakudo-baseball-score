@@ -94,9 +94,46 @@ export class RosterViewComponent {
   renderOrderTab() {
     const isMyTeam = this.targetTeam === "my";
     const currentLineup = isMyTeam ? this.myLineup : this.oppLineup;
+    const state = this.gameState.getState();
+    const gameInfo = (state && state.gameInfo) ? state.gameInfo : {
+      date: new Date().toISOString().slice(0, 10),
+      tournament: "公式戦",
+      myTeamName: "自チーム",
+      oppTeamName: "相手チーム",
+      myTeamSide: "away"
+    };
 
     return `
       <div class="space-y-3">
+        <!-- 試合基本情報 入力枠（日付・大会名・自チーム名・相手チーム名） -->
+        <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1">
+              <span>🏟️</span>
+              <span>試合基本情報</span>
+            </span>
+            <span class="text-[10px] text-slate-500">※入力内容は自動保存されます</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">試合日</label>
+              <input type="date" id="input-game-date" value="${gameInfo.date || ''}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500 font-mono">
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">大会名 / 試合名</label>
+              <input type="text" id="input-game-tournament" value="${gameInfo.tournament || ''}" placeholder="例: 春季公式戦" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500">
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">自チーム名</label>
+              <input type="text" id="input-team-my" value="${gameInfo.myTeamName || ''}" placeholder="自チーム名" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500 font-bold">
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">相手チーム名</label>
+              <input type="text" id="input-team-opp" value="${gameInfo.oppTeamName || ''}" placeholder="相手チーム名" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500 font-bold">
+            </div>
+          </div>
+        </div>
+
         <!-- 先攻・後攻トグル & 自チーム・相手チーム切替 -->
         <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
           
@@ -283,11 +320,37 @@ export class RosterViewComponent {
   }
 
   bindOrderEvents() {
+    // 試合基本情報の入力変更をGameStateに自動同期
+    const inputDate = this.container.querySelector("#input-game-date");
+    const inputTournament = this.container.querySelector("#input-game-tournament");
+    const inputMyTeam = this.container.querySelector("#input-team-my");
+    const inputOppTeam = this.container.querySelector("#input-team-opp");
+
+    const syncGameInfo = () => {
+      if (typeof this.gameState.updateGameInfo === "function") {
+        this.gameState.updateGameInfo({
+          date: inputDate ? inputDate.value : undefined,
+          tournament: inputTournament ? inputTournament.value : undefined,
+          myTeamName: inputMyTeam ? inputMyTeam.value : undefined,
+          oppTeamName: inputOppTeam ? inputOppTeam.value : undefined,
+          myTeamSide: this.myTeamSide
+        });
+      }
+    };
+
+    [inputDate, inputTournament, inputMyTeam, inputOppTeam].forEach((el) => {
+      if (el) {
+        el.addEventListener("change", syncGameInfo);
+        el.addEventListener("blur", syncGameInfo);
+      }
+    });
+
     // 攻守トグル
     const btnSide = this.container.querySelector("#btn-toggle-attack-side");
     if (btnSide) {
       btnSide.addEventListener("click", () => {
         this.myTeamSide = this.myTeamSide === "away" ? "home" : "away";
+        syncGameInfo();
         this.render();
         this.bindEvents();
       });
@@ -553,6 +616,22 @@ export class RosterViewComponent {
    * GameState の teams (away / home) に9人オーダーを完全反映し、即座に同期
    */
   applyLineupToGame() {
+    // 反映時に入力枠の内容も最終確認して反映
+    const inputDate = this.container.querySelector("#input-game-date");
+    const inputTournament = this.container.querySelector("#input-game-tournament");
+    const inputMyTeam = this.container.querySelector("#input-team-my");
+    const inputOppTeam = this.container.querySelector("#input-team-opp");
+
+    if (typeof this.gameState.updateGameInfo === "function") {
+      this.gameState.updateGameInfo({
+        date: inputDate ? inputDate.value : undefined,
+        tournament: inputTournament ? inputTournament.value : undefined,
+        myTeamName: inputMyTeam ? inputMyTeam.value : undefined,
+        oppTeamName: inputOppTeam ? inputOppTeam.value : undefined,
+        myTeamSide: this.myTeamSide
+      });
+    }
+
     const state = this.gameState.getState();
     if (!state.teams) return;
 
