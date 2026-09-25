@@ -59,7 +59,7 @@ class BaseballApp {
     this.bindGlobalActions();
     this.gameState.notify();
 
-    // 自動保存リスナー
+    // 1球ごとの自動保存
     this.gameState.subscribe((state) => {
       try {
         dbStorage.saveActiveGame(state);
@@ -69,7 +69,7 @@ class BaseballApp {
     });
 
     this.restoreSavedGameInBackground();
-    console.log("⚾️ gakudo-baseball-score 爆速起動完了");
+    console.log("⚾️ gakudo-baseball-score 起動完了");
   }
 
   async restoreSavedGameInBackground() {
@@ -89,7 +89,7 @@ class BaseballApp {
         console.log("⚾️ 直前の試合データを復元しました");
       }
     } catch (e) {
-      console.warn("データ復帰スキップ:", e.message || e);
+      console.warn("データ復元スキップ:", e.message || e);
     }
   }
 
@@ -143,12 +143,26 @@ class BaseballApp {
 
   /**
    * 打球モーダルから返却された打球結果を状態に反映
+   * ★重要: JSON.stringify を一切使わず安全な盤面スナップショットを取得
    */
   processPlayResult(playResult) {
     const state = this.gameState.getState();
 
-    // ★重要: JSON.stringify(state) を行わず、安全な盤面スナップショットを取得
-    const snapshot = this.gameState.createSnapshot();
+    // ★自己再帰エラーを防ぐため、JSON.stringifyではなく安全な独立コピーを取得
+    const snapshot = typeof this.gameState.createSnapshot === "function"
+      ? this.gameState.createSnapshot()
+      : {
+          balls: state.balls,
+          strikes: state.strikes,
+          outs: state.outs,
+          inning: state.inning,
+          isTop: state.isTop,
+          awayScore: [...(state.awayScore || [0])],
+          homeScore: [...(state.homeScore || [0])],
+          pitchCount: state.pitchCount,
+          pitchLimit: state.pitchLimit,
+          runners: { ...state.runners }
+        };
 
     state.pitchCount += 1;
 
