@@ -1,11 +1,6 @@
 /**
  * js/app.js
- * アプリ全体の司令塔・エントリーポイント（爆速起動・非同期復元版）
- * 
- * 改善点:
- * - IndexedDBの読み込み待ちによる起動フリーズ（1分待たされる現象）を根絶
- * - コンポーネント生成を最優先で即時実行し、0秒で画面を描画
- * - 過去データの復元は裏側で非同期かつタイムアウト付きで安全に実行
+ * アプリ全体の司令塔・エントリーポイント（爆速起動＆安全スナップショット版）
  */
 
 import { GameState } from "./state.js";
@@ -31,17 +26,14 @@ class BaseballApp {
    * アプリの初期化と全モジュール結合
    */
   async init() {
-    // 1. 状態管理（金庫）のインスタンス生成
     this.gameState = new GameState();
 
-    // 2. DOM要素の受け皿（スロット）を取得
     const scoreboardSlot = document.getElementById("scoreboard-slot");
     const diamondSlot = document.getElementById("diamond-slot");
     const zoneSlot = document.getElementById("zone-slot");
     const sprayModalSlot = document.getElementById("spray-modal-slot");
     const rosterSlot = document.getElementById("roster-modal-slot");
 
-    // 3. 各コンポーネントを即時生成（待たずに0秒で画面を組み立てる）
     if (scoreboardSlot) {
       this.scoreboardComponent = new ScoreboardComponent(scoreboardSlot, this.gameState);
     }
@@ -64,13 +56,10 @@ class BaseballApp {
       });
     }
 
-    // 4. グローバル操作（ヘッダーのアンドゥ、オーダー、CSV出力）をバインド
     this.bindGlobalActions();
-
-    // 5. 初期画面を全コンポーネントへ即時描画
     this.gameState.notify();
 
-    // 6. 1球ごとの完全オフライン自動保存リスナーを登録
+    // 自動保存リスナー
     this.gameState.subscribe((state) => {
       try {
         dbStorage.saveActiveGame(state);
@@ -79,18 +68,12 @@ class BaseballApp {
       }
     });
 
-    // 7. オフラインDB（IndexedDB）からの復元は裏側で非同期実行（画面を絶対にブロックしない）
     this.restoreSavedGameInBackground();
-
     console.log("⚾️ gakudo-baseball-score 爆速起動完了");
   }
 
-  /**
-   * 画面描画を邪魔しない裏側での安全データ復元（最大500msでタイムアウト）
-   */
   async restoreSavedGameInBackground() {
     try {
-      // 500ミリ秒以上応答がなければ諦めるタイムアウトガード
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error("IndexedDBタイムアウト")), 500)
       );
@@ -106,15 +89,11 @@ class BaseballApp {
         console.log("⚾️ 直前の試合データを復元しました");
       }
     } catch (e) {
-      console.warn("データ復帰をスキップ（初期状態で開始）:", e.message || e);
+      console.warn("データ復帰スキップ:", e.message || e);
     }
   }
 
-  /**
-   * ヘッダーや共通ボタンのイベント登録
-   */
   bindGlobalActions() {
-    // ヘッダーの「1球取消」ボタン
     const undoBtn = document.getElementById("btn-undo");
     if (undoBtn) {
       undoBtn.addEventListener("click", (e) => {
@@ -123,7 +102,6 @@ class BaseballApp {
       });
     }
 
-    // オーダー・名簿モーダルの開閉
     const rosterBtn = document.getElementById("btn-open-roster");
     const rosterSlot = document.getElementById("roster-modal-slot");
     if (rosterBtn && rosterSlot) {
@@ -132,7 +110,6 @@ class BaseballApp {
       });
     }
 
-    // CSVエクスポートボタン
     const exportBtn = document.getElementById("btn-export-csv");
     if (exportBtn) {
       exportBtn.addEventListener("click", () => {
@@ -145,7 +122,6 @@ class BaseballApp {
       });
     }
 
-    // キーボードショートカット（Ctrl+Z / Cmd+Z で1球取消）
     window.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -154,10 +130,6 @@ class BaseballApp {
     });
   }
 
-  /**
-   * 打球結果ボタン（インプレー）タップ時: 打球Canvasモーダルを起動
-   * @param {string} course 選択中の投球コース
-   */
   handleInPlay(course) {
     if (!this.sprayModalComponent) return;
 
@@ -171,15 +143,15 @@ class BaseballApp {
 
   /**
    * 打球モーダルから返却された打球結果を状態に反映
-   * @param {Object} playResult { course, type, quality, runs, area, hitCoord }
    */
   processPlayResult(playResult) {
     const state = this.gameState.getState();
-    const snapshot = JSON.parse(JSON.stringify(state));
+
+    // ★重要: JSON.stringify(state) を行わず、安全な盤面スナップショットを取得
+    const snapshot = this.gameState.createSnapshot();
 
     state.pitchCount += 1;
 
-    // 打球種別によるアウト・進塁・得点ロジック
     const type = playResult.type;
     const runsFromPlay = playResult.runs || 0;
 
@@ -263,7 +235,6 @@ class BaseballApp {
   }
 }
 
-// DOMContentLoaded のタイミングで起動
 document.addEventListener("DOMContentLoaded", () => {
   const app = new BaseballApp();
   app.init();
