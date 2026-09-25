@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<script>window.onerror=function(m,u,l){alert("エラー:\n"+m+"\n行:"+l);};</script>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -14,10 +13,9 @@
   <link rel="stylesheet" href="css/components.css">
 </head>
 
-<body class="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col items-center p-2 sm:p-3 bg-[#0b1329] text-slate-100 font-sans select-none justify-between">
+<body class="min-h-screen bg-[#0b1329] text-slate-100 font-sans select-none flex flex-col items-center p-2 sm:p-3">
 
-<!-- ... existing code ... -->
-  <!-- 1. アプリヘッダー (PC・スマホ両対応の2段レイアウト) -->
+  <!-- 1. アプリヘッダー (PC・スマホ両対応の美しい2段レイアウト) -->
   <header class="w-full max-w-lg lg:max-w-6xl mb-2 flex flex-col gap-2 border-b border-slate-800 pb-2 flex-shrink-0">
     <!-- 上段：タイトル＆バージョン -->
     <div class="flex items-center justify-between">
@@ -29,7 +27,7 @@
       <p class="text-[10px] text-slate-500 font-mono hidden sm:block">gakudo-baseball-score</p>
     </div>
 
-    <!-- 下段：4等分均等アクションボタン（PCでも間延びせず美しい最大幅・高さ完全統一） -->
+    <!-- 下段：4等分均等アクションボタン（PC・スマホともに高さ・幅が完全統一） -->
     <div class="grid grid-cols-4 gap-2 w-full max-w-full sm:max-w-xl">
       <button id="btn-open-roster" type="button" class="h-9 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1.5 shadow transition">
         <span>📋</span>
@@ -49,27 +47,42 @@
       </button>
     </div>
   </header>
-<!-- ... existing code ... -->
-      <!-- 走者イベントボタン群 -->
-      <div class="grid grid-cols-4 gap-1.5 mb-2.5">
-        <button type="button" id="btn-runner-steal" class="h-8 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-200 text-[11px] font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-1 shadow-sm transition">
+
+  <!-- 2. メインコンテンツ: PCでは左右2カラム、スマホでは縦1列スクロール -->
+  <div class="w-full max-w-lg lg:max-w-6xl flex-1 flex flex-col lg:flex-row gap-3 items-stretch pb-2">
+    
+    <!-- 【左カラム】試合状況（スコアボード・走者BSO・直近投球ログ） -->
+    <div class="w-full lg:w-1/2 flex flex-col gap-2.5">
+      <!-- ① スコアボード & 球数・タイマー管理 -->
+      <section id="scoreboard-slot" class="w-full">
+        <!-- scoreboard.js が描画 -->
+      </section>
+
+      <!-- ② 走者ダイアモンド & BSOカウントランプ -->
+      <section id="diamond-slot" class="w-full">
+        <!-- runnerDiamond.js が描画 -->
+      </section>
+
+      <!-- ③ 走者イベント操作ボタン群 -->
+      <div class="grid grid-cols-4 gap-1.5">
+        <button type="button" id="btn-runner-steal" class="h-8 bg-slate-850 hover:bg-slate-800 active:scale-95 text-slate-200 text-[11px] font-bold rounded-lg border border-slate-700 bg-slate-800/90 flex items-center justify-center gap-1 shadow-sm transition">
           🏃 盗塁
         </button>
-        <button type="button" id="btn-runner-caught" class="h-8 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-rose-400 text-[11px] font-bold rounded-lg border border-rose-900/40 flex items-center justify-center gap-1 shadow-sm transition">
+        <button type="button" id="btn-runner-caught" class="h-8 bg-slate-850 hover:bg-slate-800 active:scale-95 text-rose-400 text-[11px] font-bold rounded-lg border border-rose-900/40 bg-slate-800/90 flex items-center justify-center gap-1 shadow-sm transition">
           ✕ 盗塁刺
         </button>
-        <button type="button" id="btn-runner-wildpitch" class="h-8 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-amber-300 text-[11px] font-bold rounded-lg border border-amber-900/40 flex items-center justify-center gap-1 shadow-sm transition">
+        <button type="button" id="btn-runner-wildpitch" class="h-8 bg-slate-850 hover:bg-slate-800 active:scale-95 text-amber-300 text-[11px] font-bold rounded-lg border border-amber-900/40 bg-slate-800/90 flex items-center justify-center gap-1 shadow-sm transition">
           ⚡ 暴投進塁
         </button>
-        <button type="button" id="btn-runner-pickoff" class="h-8 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-indigo-300 text-[11px] font-bold rounded-lg border border-indigo-900/40 flex items-center justify-center gap-1 shadow-sm transition">
+        <button type="button" id="btn-runner-pickoff" class="h-8 bg-slate-850 hover:bg-slate-800 active:scale-95 text-indigo-300 text-[11px] font-bold rounded-lg border border-indigo-900/40 bg-slate-800/90 flex items-center justify-center gap-1 shadow-sm transition">
           🎯 牽制死
         </button>
       </div>
 
-      <!-- 直近の投球ログ（ヘッダー重なり解消版） -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-2.5 shadow-md">
+      <!-- ④ 直近の投球ログ（ヘッダーと重ならない完全整列版） -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 shadow-md flex-1 flex flex-col">
         <!-- ログヘッダー：左に見出し、右端に総投球数を綺麗に整列 -->
-        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 flex-shrink-0">
           <div class="flex items-center gap-1.5">
             <span class="text-xs">📋</span>
             <span class="text-xs font-bold text-slate-300">直近の投球ログ</span>
@@ -80,47 +93,51 @@
           </div>
         </div>
 
-        <!-- ログテーブル -->
-        <div class="overflow-x-auto max-h-48 overflow-y-auto">
-<!-- ... existing code ... -->
-          
-  <!-- 2. メインコンテンツ: PCでは左右均等2カラム、スクロールなしフィット -->
-  <div class="w-full max-w-lg lg:max-w-6xl flex-1 flex flex-col lg:flex-row gap-3 items-stretch overflow-y-auto lg:overflow-hidden pb-1">
-    
-    <!-- 【左カラム】試合状況（スコアボード・走者BSO・直近投球ログ） -->
-    <div class="w-full lg:w-1/2 flex flex-col gap-2 justify-between">
-      <!-- スコアボード & 球数・タイマー管理 -->
-      <section id="scoreboard-slot" class="w-full">
-        <!-- scoreboard.js が描画 -->
-      </section>
-
-      <!-- 走者ダイアモンド & BSOカウントランプ -->
-      <section id="diamond-slot" class="w-full">
-        <!-- runnerDiamond.js が描画 -->
-      </section>
-
-      <!-- 直近投球ログスロット -->
-      <section id="log-slot" class="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 shadow text-xs flex-1 flex flex-col justify-center min-h-[70px]">
-        <!-- runnerDiamond.js が更新 -->
+        <!-- ログテーブル描画スロット -->
+        <div id="log-slot" class="overflow-x-auto max-h-48 overflow-y-auto flex-1">
+          <!-- runnerDiamond.js または app.js が更新 -->
+        </div>
       </section>
     </div>
 
     <!-- 【右カラム】投球入力コンソール（17分割盤面 & 判定ボタン） -->
-    <div class="w-full lg:w-1/2 flex flex-col justify-center">
+    <div class="w-full lg:w-1/2 flex flex-col">
       <main class="w-full">
         <section id="zone-slot">
           <!-- zone.js がプロ仕様コンソールを描画 -->
         </section>
       </main>
     </div>
- 
-<!-- 3. モーダルスロット -->
-  <div id="spray-modal-slot" class="hidden"></div>
-  <div id="roster-modal-slot" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 p-3 overflow-y-auto flex items-center justify-center"></div>
 
-  <!-- リセット確認ダイアログ（ここに置くのが最も安全です） -->
-  <div id="reset-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-    ...（中身はそのまま）...
+  </div>
+
+  <!-- 3. モーダルスロット -->
+  <!-- 打球入力モーダル -->
+  <div id="spray-modal-slot" class="hidden"></div>
+  
+  <!-- オーダー登録モーダル -->
+  <div id="roster-modal-slot" class="hidden fixed inset-0 bg-black/80 z-40 p-3 overflow-y-auto flex items-center justify-center"></div>
+
+  <!-- リセット確認ダイアログ（誤操作を完全に防ぐ2段階モーダル） -->
+  <div id="reset-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 select-none">
+    <div class="bg-slate-900 border border-rose-900/60 rounded-2xl w-full max-w-sm p-4 shadow-2xl space-y-3">
+      <div class="flex items-center gap-2 text-rose-400 border-b border-slate-800 pb-2">
+        <span class="text-lg">⚠️</span>
+        <h3 class="font-bold text-sm text-slate-100">試合データのリセット</h3>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        現在のカウント・スコア・投球履歴をすべて初期化します。<br>
+        <span class="text-rose-400 font-bold">※この操作は取り消せません。</span>
+      </p>
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button type="button" id="btn-cancel-reset" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-bold rounded-lg transition">
+          キャンセル
+        </button>
+        <button type="button" id="btn-confirm-reset" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-bold rounded-lg transition shadow-md">
+          リセット実行
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- 4. ES Modules エントリーポイント -->
