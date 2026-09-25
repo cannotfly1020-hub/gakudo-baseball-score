@@ -1,6 +1,10 @@
 /**
  * js/app.js
- * アプリ全体の司令塔・エントリーポイント（爆速起動＆安全スナップショット版）
+ * アプリ全体の司令塔（完全非同期・ゼロ遅延レスポンス版）
+ * 
+ * 改善点:
+ * - データベース保存（IndexedDB）を完全非同期デバウンス化し、タップ直後の画面描画を一切ブロックしない
+ * - processPlayResult 内の snapshot を createSnapshot に統一
  */
 
 import { GameState } from "./state.js";
@@ -20,11 +24,9 @@ class BaseballApp {
     this.zoneComponent = null;
     this.sprayModalComponent = null;
     this.rosterViewComponent = null;
+    this.saveTimer = null;
   }
 
-  /**
-   * アプリの初期化と全モジュール結合
-   */
   async init() {
     this.gameState = new GameState();
 
@@ -59,23 +61,25 @@ class BaseballApp {
     this.bindGlobalActions();
     this.gameState.notify();
 
-    // 1球ごとの自動保存
+    // タップの反応を邪魔しない非同期デバウンス保存（UI描画を優先）
     this.gameState.subscribe((state) => {
-      try {
-        dbStorage.saveActiveGame(state);
-      } catch (err) {
-        console.warn("自動保存エラー:", err);
-      }
+      if (this.saveTimer) clearTimeout(this.saveTimer);
+      this.saveTimer = setTimeout(() => {
+        try {
+          dbStorage.saveActiveGame(state);
+        } catch (err) {
+          console.warn("バックグラウンド保存スキップ:", err);
+        }
+      }, 300);
     });
 
     this.restoreSavedGameInBackground();
-    console.log("⚾️ gakudo-baseball-score 起動完了");
   }
 
   async restoreSavedGameInBackground() {
     try {
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("IndexedDBタイムアウト")), 500)
+        setTimeout(() => reject(new Error("IndexedDBタイムアウト")), 400)
       );
 
       const savedState = await Promise.race([
@@ -86,10 +90,9 @@ class BaseballApp {
       if (savedState && savedState.history && savedState.history.length > 0) {
         this.gameState.state = savedState;
         this.gameState.notify();
-        console.log("⚾️ 直前の試合データを復元しました");
       }
     } catch (e) {
-      console.warn("データ復元スキップ:", e.message || e);
+      // 復元失敗時は初期状態で即座に操作可能とする
     }
   }
 
@@ -141,28 +144,9 @@ class BaseballApp {
     });
   }
 
-  /**
-   * 打球モーダルから返却された打球結果を状態に反映
-   * ★重要: JSON.stringify を一切使わず安全な盤面スナップショットを取得
-   */
   processPlayResult(playResult) {
     const state = this.gameState.getState();
-
-    // ★自己再帰エラーを防ぐため、JSON.stringifyではなく安全な独立コピーを取得
-    const snapshot = typeof this.gameState.createSnapshot === "function"
-      ? this.gameState.createSnapshot()
-      : {
-          balls: state.balls,
-          strikes: state.strikes,
-          outs: state.outs,
-          inning: state.inning,
-          isTop: state.isTop,
-          awayScore: [...(state.awayScore || [0])],
-          homeScore: [...(state.homeScore || [0])],
-          pitchCount: state.pitchCount,
-          pitchLimit: state.pitchLimit,
-          runners: { ...state.runners }
-        };
+    const snapshot = this.gameState.createSnapshot();
 
     state.pitchCount += 1;
 
