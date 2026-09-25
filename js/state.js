@@ -24,6 +24,15 @@ export class GameState {
     }));
 
     this.state = {
+      // 試合基本メタ情報（日付自動取得・大会名・チーム名）
+      gameInfo: {
+        date: new Date().toISOString().slice(0, 10), // 例: "2026-09-26"
+        tournament: "公式戦",
+        myTeamName: "自チーム",
+        oppTeamName: "相手チーム",
+        myTeamSide: "away" // "away" (先攻) または "home" (後攻)
+      },
+
       // カウント
       balls: 0,
       strikes: 0,
@@ -98,6 +107,7 @@ export class GameState {
    */
   createSnapshot() {
     return {
+      gameInfo: { ...this.state.gameInfo },
       balls: this.state.balls,
       strikes: this.state.strikes,
       outs: this.state.outs,
@@ -139,8 +149,11 @@ export class GameState {
     // 高速スナップショット取得（JSON.stringify不使用）
     const snapshot = this.createSnapshot();
 
+    const currentPitcherName = this.state.currentPitcher ? this.state.currentPitcher.name : "投手";
+
     const pitchEvent = {
       pitchNum: this.state.pitchCount + 1,
+      pitcherName: currentPitcherName, // 誰が投げたかを1球ごとに直接刻印
       inningStr: `${this.state.inning}回${this.state.isTop ? "表" : "裏"}`,
       course: course,
       result: resultType,
@@ -372,6 +385,31 @@ export class GameState {
 
   resetGame() {
     this.initDefaultState();
+    this.notify();
+  }
+
+  /**
+   * 試合基本情報（日付・大会名・チーム名・攻守）の更新
+   */
+  updateGameInfo(info) {
+    if (!info) return;
+    this.state.gameInfo = {
+      ...this.state.gameInfo,
+      ...info
+    };
+
+    // チーム名が更新された場合、teams.away.name と teams.home.name にも即座に同期
+    if (this.state.teams) {
+      if (this.state.gameInfo.myTeamSide === "away") {
+        this.state.teams.away.name = this.state.gameInfo.myTeamName || "自チーム";
+        this.state.teams.home.name = this.state.gameInfo.oppTeamName || "相手チーム";
+      } else {
+        this.state.teams.away.name = this.state.gameInfo.oppTeamName || "相手チーム";
+        this.state.teams.home.name = this.state.gameInfo.myTeamName || "自チーム";
+      }
+    }
+
+    this.syncCurrentMatchup();
     this.notify();
   }
 
