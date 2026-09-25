@@ -35,7 +35,9 @@
       </button>
       <button id="btn-undo" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow">
         ↺ 1球取消 <span class="hidden lg:inline text-[10px] opacity-80">(Ctrl+Z)</span>
-      </button>
+    　<button id="btn-reset-game" class="bg-rose-950/80 hover:bg-rose-900 border border-rose-800 active:scale-95 text-rose-300 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow" title="試合を最初からやり直す">
+ 　　　 🗑 リセット
+　　　</button>
     </div>
   </header>
 
@@ -68,7 +70,23 @@
         </section>
       </main>
     </div>
-
+ 
+    <!-- 追加イメージ：誤操作防止の安全ダイアログ -->
+<div id="reset-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+  <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 max-w-xs w-full shadow-2xl space-y-3 text-center">
+    <div class="text-3xl">⚠️</div>
+    <h3 class="text-sm font-black text-white">試合を初期化しますか？</h3>
+    <p class="text-xs text-slate-400">現在のスコア、カウント、投球履歴はすべて消去され、1回表・0球に戻ります。</p>
+    <div class="flex gap-2 pt-2">
+      <button id="btn-cancel-reset" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-xl text-xs font-bold">
+        キャンセル
+      </button>
+      <button id="btn-confirm-reset" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-xl text-xs font-black shadow">
+        初期化する
+      </button>
+    </div>
+  </div>
+</div>
   </div>
 
   <!-- 3. モーダルスロット -->
