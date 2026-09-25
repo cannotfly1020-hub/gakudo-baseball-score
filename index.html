@@ -17,35 +17,73 @@
 <body class="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col items-center p-2 sm:p-3 bg-[#0b1329] text-slate-100 font-sans select-none justify-between">
 
 <!-- ... existing code ... -->
-  <!-- 1. アプリヘッダー (PCでは最大幅を広げて広々表示) -->
+  <!-- 1. アプリヘッダー (PC・スマホ両対応の2段レイアウト) -->
   <header class="w-full max-w-lg lg:max-w-6xl mb-2 flex flex-col gap-2 border-b border-slate-800 pb-2 flex-shrink-0">
     <!-- 上段：タイトル＆バージョン -->
     <div class="flex items-center justify-between">
-      <div class="flex items-center gap-1.5">
-        <span class="text-xl">⚾️</span>
-        <h1 class="text-base sm:text-lg font-bold text-emerald-400">学童野球 1球速報</h1>
-        <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700">v1.0</span>
+      <div class="flex items-center gap-2">
+        <span class="text-xl sm:text-2xl">⚾️</span>
+        <h1 class="text-base sm:text-lg font-black text-emerald-400">学童野球 1球速報</h1>
+        <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700 font-mono">v1.0</span>
       </div>
-      <p class="text-[10px] text-slate-400 hidden sm:block">gakudo-baseball-score</p>
+      <p class="text-[10px] text-slate-500 font-mono hidden sm:block">gakudo-baseball-score</p>
     </div>
 
-    <!-- 下段：4等分均等アクションボタン（高さ・余白を完全統一） -->
-    <div class="grid grid-cols-4 gap-1.5 w-full">
-      <button id="btn-open-roster" type="button" class="h-9 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1 shadow transition">
-        📋 オーダー
+    <!-- 下段：4等分均等アクションボタン（PCでも間延びせず美しい最大幅・高さ完全統一） -->
+    <div class="grid grid-cols-4 gap-2 w-full max-w-full sm:max-w-xl">
+      <button id="btn-open-roster" type="button" class="h-9 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1.5 shadow transition">
+        <span>📋</span>
+        <span class="truncate">オーダー</span>
       </button>
-      <button id="btn-export-csv" type="button" class="h-9 bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-900/50 flex items-center justify-center gap-1 shadow transition" title="公式スコアCSVを保存">
-        📤 CSV
+      <button id="btn-export-csv" type="button" class="h-9 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-900/50 flex items-center justify-center gap-1.5 shadow transition" title="公式スコアCSVを保存">
+        <span>📤</span>
+        <span class="truncate">CSV</span>
       </button>
-      <button id="btn-undo" type="button" class="h-9 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1 shadow transition">
-        ↺ 1球取消
+      <button id="btn-undo" type="button" class="h-9 px-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 shadow transition">
+        <span>↺</span>
+        <span class="truncate">1球取消</span>
       </button>
-      <button id="btn-reset-game" type="button" class="h-9 bg-rose-950/80 hover:bg-rose-900 active:scale-95 text-rose-300 text-xs font-bold rounded-lg border border-rose-800 flex items-center justify-center gap-1 shadow transition" title="試合を最初からやり直す">
-        🗑 リセット
+      <button id="btn-reset-game" type="button" class="h-9 px-2 bg-rose-950/80 hover:bg-rose-900 active:scale-95 text-rose-300 text-xs font-bold rounded-lg border border-rose-800/80 flex items-center justify-center gap-1.5 shadow transition" title="試合を最初からやり直す">
+        <span>🗑</span>
+        <span class="truncate">リセット</span>
       </button>
     </div>
   </header>
 <!-- ... existing code ... -->
+      <!-- 走者イベントボタン群 -->
+      <div class="grid grid-cols-4 gap-1.5 mb-2.5">
+        <button type="button" id="btn-runner-steal" class="h-8 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-200 text-[11px] font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-1 shadow-sm transition">
+          🏃 盗塁
+        </button>
+        <button type="button" id="btn-runner-caught" class="h-8 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-rose-400 text-[11px] font-bold rounded-lg border border-rose-900/40 flex items-center justify-center gap-1 shadow-sm transition">
+          ✕ 盗塁刺
+        </button>
+        <button type="button" id="btn-runner-wildpitch" class="h-8 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-amber-300 text-[11px] font-bold rounded-lg border border-amber-900/40 flex items-center justify-center gap-1 shadow-sm transition">
+          ⚡ 暴投進塁
+        </button>
+        <button type="button" id="btn-runner-pickoff" class="h-8 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-indigo-300 text-[11px] font-bold rounded-lg border border-indigo-900/40 flex items-center justify-center gap-1 shadow-sm transition">
+          🎯 牽制死
+        </button>
+      </div>
+
+      <!-- 直近の投球ログ（ヘッダー重なり解消版） -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-2.5 shadow-md">
+        <!-- ログヘッダー：左に見出し、右端に総投球数を綺麗に整列 -->
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs">📋</span>
+            <span class="text-xs font-bold text-slate-300">直近の投球ログ</span>
+          </div>
+          <div class="flex items-center gap-1 text-[11px] font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+            <span class="text-slate-400">総投球数:</span>
+            <span id="log-total-pitch-count" class="text-emerald-400 font-bold">0球</span>
+          </div>
+        </div>
+
+        <!-- ログテーブル -->
+        <div class="overflow-x-auto max-h-48 overflow-y-auto">
+<!-- ... existing code ... -->
+          
   <!-- 2. メインコンテンツ: PCでは左右均等2カラム、スクロールなしフィット -->
   <div class="w-full max-w-lg lg:max-w-6xl flex-1 flex flex-col lg:flex-row gap-3 items-stretch overflow-y-auto lg:overflow-hidden pb-1">
     
