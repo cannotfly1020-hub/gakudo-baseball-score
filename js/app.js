@@ -197,6 +197,10 @@ class BaseballApp {
 
     state.pitchCount += 1;
 
+    // 打席完了に伴い、攻撃チームの打順を自動送り（1番〜9番ループ）
+    // 3アウトチェンジが発生した場合でも、次イニングの先頭打者が正しく保存されます
+    this.gameState.advanceBatter();
+
     const type = playResult.type;
     const runsFromPlay = playResult.runs || 0;
 
@@ -268,7 +272,7 @@ class BaseballApp {
 
     const pitchEvent = {
       pitchNum: state.pitchCount,
-      inningStr: `${state.inning}回${state.isTop ? "表" : "裏"}`,
+      inningStr: `${snapshot.inning}回${snapshot.isTop ? "表" : "裏"}`,
       course: playResult.course,
       result: `打球 (${type})`,
       play: playResult,
