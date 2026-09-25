@@ -1,7 +1,7 @@
 /**
  * js/state.js
  * 試合状態の一元管理（BSO、走者、球数、イニング、投球履歴）
- * 得点配列をイニング番号（state.inning）と直接同期させ、表裏のズレを根絶
+ * 自己再帰的な履歴肥大化（RangeError）を防止する安全スナップショット実装
  */
 
 export class GameState {
@@ -10,7 +10,7 @@ export class GameState {
     this.listeners = [];
   }
 
-  // 初期状態の設定（新規試合リセット時にも再利用可能）
+  // 初期状態の設定
   initDefaultState() {
     this.state = {
       // カウント
@@ -18,33 +18,31 @@ export class GameState {
       strikes: 0,
       outs: 0,
 
-      // イニング・得点（各イニングのindex = イニング番号 - 1）
-      // 1回表・裏ともに初期値0で配列を揃えておくことでインデックスズレを防止
+      // イニング・得点
       inning: 1,
-      isTop: true, // true: 表 (先攻), false: 裏 (後攻)
-      awayScore: [0], // 先攻得点
-      homeScore: [0], // 後攻得点
+      isTop: true, // true: 表, false: 裏
+      awayScore: [0],
+      homeScore: [0],
 
-      // 球数・タイマー設定
+      // 球数・タイマー
       pitchCount: 0,
-      pitchLimit: 70, // 60 または 70
-      timeLimitMinutes: 90, // 60 または 90
+      pitchLimit: 70,
+      timeLimitMinutes: 90,
       timerRemainingSeconds: 90 * 60,
       timerRunning: false,
       isTieBreak: false,
 
-      // 走者 (true: 在塁, false: 空塁)
+      // 走者
       runners: {
         1: false,
         2: false,
         3: false
       },
 
-      // 現在の打者・投手
       currentBatter: { name: "1番 打者", order: 1, pos: "投" },
       currentPitcher: { name: "先発 投手" },
 
-      // 1球ごとの全投球ログ
+      // 投球履歴（※スナップショットには含めない）
       history: []
     };
   }
@@ -61,8 +59,34 @@ export class GameState {
     return this.state;
   }
 
+  /**
+   * 履歴（history）を除外した安全な盤面スナップショットを生成
+   * これにより再帰的なデータ爆発（RangeError）を完全に根絶する
+   */
+  createSnapshot() {
+    return {
+      balls: this.state.balls,
+      strikes: this.state.strikes,
+      outs: this.state.outs,
+      inning: this.state.inning,
+      isTop: this.state.isTop,
+      awayScore: [...this.state.awayScore],
+      homeScore: [...this.state.homeScore],
+      pitchCount: this.state.pitchCount,
+      pitchLimit: this.state.pitchLimit,
+      timeLimitMinutes: this.state.timeLimitMinutes,
+      timerRemainingSeconds: this.state.timerRemainingSeconds,
+      timerRunning: this.state.timerRunning,
+      isTieBreak: this.state.isTieBreak,
+      runners: { ...this.state.runners },
+      currentBatter: { ...this.state.currentBatter },
+      currentPitcher: { ...this.state.currentPitcher }
+    };
+  }
+
   recordPitch(course, resultType) {
-    const snapshot = JSON.parse(JSON.stringify(this.state));
+    // 履歴自身を含めない安全スナップショットを取得
+    const snapshot = this.createSnapshot();
 
     let pitchEvent = {
       pitchNum: this.state.pitchCount + 1,
@@ -133,7 +157,6 @@ export class GameState {
     }
   }
 
-  // 攻守交代処理（イニング配列を確実に初期化）
   handleSideRetired() {
     this.state.balls = 0;
     this.state.strikes = 0;
@@ -141,20 +164,15 @@ export class GameState {
     this.state.runners = { 1: false, 2: false, 3: false };
 
     if (!this.state.isTop) {
-      // 裏が終わったらイニングを進める
       this.state.inning += 1;
       this.state.isTop = true;
-      const idx = this.state.inning - 1;
-      this.ensureScoreArrayCapacity(idx);
+      this.ensureScoreArrayCapacity(this.state.inning - 1);
     } else {
-      // 表が終わったら裏へ
       this.state.isTop = false;
-      const idx = this.state.inning - 1;
-      this.ensureScoreArrayCapacity(idx);
+      this.ensureScoreArrayCapacity(this.state.inning - 1);
     }
   }
 
-  // 配列の指定インデックスまで0で埋める安全関数
   ensureScoreArrayCapacity(targetIdx) {
     while (this.state.awayScore.length <= targetIdx) {
       this.state.awayScore.push(0);
@@ -176,7 +194,6 @@ export class GameState {
     }
   }
 
-  // 現在のイニングに対して得点を加算
   addRun(points = 1) {
     const idx = this.state.inning - 1;
     this.ensureScoreArrayCapacity(idx);
@@ -189,7 +206,6 @@ export class GameState {
     this.notify();
   }
 
-  // リカバリー用: 任意のイニング・チームのスコアを直接変更
   setScore(isTop, inningIdx, score) {
     this.ensureScoreArrayCapacity(inningIdx);
     const parsed = Math.max(0, parseInt(score, 10) || 0);
@@ -201,7 +217,6 @@ export class GameState {
     this.notify();
   }
 
-  // リカバリー用: BSO・球数・イニングの直接補正
   setCount(type, val) {
     if (["balls", "strikes", "outs"].includes(type)) {
       this.state[type] = Math.max(0, parseInt(val, 10) || 0);
@@ -221,7 +236,6 @@ export class GameState {
     this.notify();
   }
 
-  // 新規試合開始（完全初期化）
   resetGame() {
     this.initDefaultState();
     this.notify();
@@ -242,7 +256,8 @@ export class GameState {
   undo() {
     if (this.state.history.length === 0) return;
     const lastAction = this.state.history.pop();
-    this.state = lastAction.snapshot;
+    // 復元時、history配列は壊さず盤面状態だけを復元
+    Object.assign(this.state, lastAction.snapshot);
     this.notify();
   }
 }
