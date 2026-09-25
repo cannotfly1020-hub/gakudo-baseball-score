@@ -1,17 +1,8 @@
 /**
  * js/components/rosterView.js
- * 団員名簿マスタ ＆ オーダー編成（背番号タップ・相手テンキー）コンポーネント
- * 
- * 担当役割:
- * - 自チーム団員名簿マスタ（背番号・氏名・学年・投打・メイン守備）の管理
- * - LINE・メモ帳テキスト貼り付けによる一括取込（カンマ・空白・タブ区切り対応）
- * - スタメンオーダー爆速編成（背番号バッジタップによる打順割り当て）
- * - 前回のスタメンオーダー即時呼出（3秒展開）
- * - 相手チーム専用「大型背番号テンキー入力モード」（名前入力不要で即座に試合開始）
- * - 守備位置・打順・リエントリー（再出場）の柔軟な変更
+ * 団員名簿マスタ ＆ オーダー編成（先攻・後攻・打順自動送り完全連動版）
  */
 
-// 守備位置の定義リスト
 export const POSITIONS = [
   { id: "投", name: "投手 (ピッチャー)" },
   { id: "捕", name: "捕手 (キャッチャー)" },
@@ -25,7 +16,6 @@ export const POSITIONS = [
   { id: "指", name: "指名打者 (DH)" }
 ];
 
-// 初期サンプル名簿（初回起動時のプレースホルダー）
 const DEFAULT_ROSTER = [
   { id: "p1", number: 1, name: "山田 太郎", grade: 6, throws: "右", bats: "右", pos: "投" },
   { id: "p2", number: 2, name: "佐藤 健一", grade: 6, throws: "右", bats: "右", pos: "捕" },
@@ -41,30 +31,20 @@ const DEFAULT_ROSTER = [
 ];
 
 export class RosterViewComponent {
-  /**
-   * @param {HTMLElement} containerElement 描画対象の親要素
-   * @param {GameState} gameState 試合状態管理インスタンス
-   * @param {Object} options コールバック等
-   */
   constructor(containerElement, gameState, options = {}) {
     this.container = containerElement;
     this.gameState = gameState;
     this.options = options;
 
-    // 現在のアクティブタブ: "order" (オーダー編成) または "roster" (名簿マスタ)
-    this.activeSubTab = "order";
-    // 編集対象チーム: "my" (自チーム) または "opp" (相手チーム)
-    this.targetTeam = "my";
+    this.activeSubTab = "order"; // "order" | "roster"
+    this.targetTeam = "my"; // "my" | "opp"
+    this.myTeamSide = "away"; // "away" (先攻) または "home" (後攻)
 
-    // 自チーム名簿データ（LocalStorageから復元、なければ初期データ）
     this.roster = this.loadRoster();
-
-    // 自チーム・相手チームの1〜9番スタメン
     this.myLineup = this.loadLineup("my") || this.generateDefaultLineup();
     this.oppLineup = this.loadLineup("opp") || this.generateOpponentDefaultLineup();
 
-    // テンキーモーダル用の状態
-    this.tenkeyTargetSlot = null; // { team: "opp", order: 1 }
+    this.tenkeyTargetSlot = null;
     this.tenkeyValue = "";
 
     this.init();
@@ -77,9 +57,9 @@ export class RosterViewComponent {
 
   render() {
     this.container.innerHTML = `
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-lg select-none space-y-3">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-2xl select-none space-y-3 w-full max-w-xl max-h-[90vh] overflow-y-auto">
         
-        <!-- ヘッダーサブナビゲーション (オーダー編成 ⇄ 団員名簿マスタ) -->
+        <!-- ヘッダーナビゲーション -->
         <div class="flex items-center justify-between border-b border-slate-800 pb-2">
           <div class="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-slate-800">
             <button type="button" id="subtab-order" class="px-3 py-1.5 rounded-lg text-xs font-black transition ${
@@ -90,16 +70,16 @@ export class RosterViewComponent {
             <button type="button" id="subtab-roster" class="px-3 py-1.5 rounded-lg text-xs font-black transition ${
               this.activeSubTab === "roster" ? "bg-emerald-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
             }">
-              👥 団員名簿マスタ (${this.roster.length}名)
+              👥 団員名簿 (${this.roster.length}名)
             </button>
           </div>
 
-          <button type="button" id="btn-close-roster-view" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-2.5 py-1.5 rounded-lg transition">
-            ✕ 閉じる
+          <button type="button" id="btn-close-roster-view" class="text-slate-400 hover:text-white text-base px-2 py-1 rounded-lg hover:bg-slate-800 transition">
+            ✕
           </button>
         </div>
 
-        <!-- コンテンツエリア -->
+        <!-- タブコンテンツ -->
         <div id="roster-view-content">
           ${this.activeSubTab === "order" ? this.renderOrderTab() : this.renderRosterTab()}
         </div>
@@ -117,43 +97,42 @@ export class RosterViewComponent {
 
     return `
       <div class="space-y-3">
-        <!-- チーム切り替え ＆ 省力化アクションバー -->
-        <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-1 bg-slate-800/80 p-0.5 rounded-lg border border-slate-700 text-xs">
-            <button type="button" id="team-switch-my" class="px-2.5 py-1 rounded-md font-extrabold transition ${
-              isMyTeam ? "bg-sky-600 text-white" : "text-slate-400 hover:text-white"
+        <!-- 先攻・後攻トグル & 自チーム・相手チーム切替 -->
+        <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+          
+          <!-- 攻守設定 -->
+          <div class="flex items-center gap-1.5 w-full sm:w-auto">
+            <span class="text-[11px] text-slate-400 font-bold">自チーム:</span>
+            <button type="button" id="btn-toggle-attack-side" class="px-2 py-1 rounded font-bold border text-[11px] transition ${
+              this.myTeamSide === "away"
+                ? "bg-sky-950 text-sky-300 border-sky-700"
+                : "bg-amber-950 text-amber-300 border-amber-700"
             }">
-              自チーム (先発)
+              ${this.myTeamSide === "away" ? "先攻 (1回表)" : "後攻 (1回裏)"}
             </button>
-            <button type="button" id="team-switch-opp" class="px-2.5 py-1 rounded-md font-extrabold transition ${
-              !isMyTeam ? "bg-amber-600 text-white" : "text-slate-400 hover:text-white"
+          </div>
+
+          <!-- 編集対象チーム切替 -->
+          <div class="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-700 w-full sm:w-auto justify-center">
+            <button type="button" id="team-switch-my" class="px-3 py-1 rounded font-extrabold transition text-xs ${
+              isMyTeam ? "bg-sky-600 text-white shadow" : "text-slate-400 hover:text-white"
+            }">
+              自チーム
+            </button>
+            <button type="button" id="team-switch-opp" class="px-3 py-1 rounded font-extrabold transition text-xs ${
+              !isMyTeam ? "bg-amber-600 text-white shadow" : "text-slate-400 hover:text-white"
             }">
               相手チーム
             </button>
           </div>
-
-          ${
-            isMyTeam
-              ? `
-            <button type="button" id="btn-copy-prev-order" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 border border-emerald-900/50 text-[11px] font-bold px-2 py-1.5 rounded-lg flex items-center gap-1 shadow transition">
-              <span>↩️ 前回オーダー呼出</span>
-            </button>
-          `
-              : `
-            <span class="text-[10px] text-amber-300 bg-amber-950/80 border border-amber-800 px-2 py-1 rounded-lg">
-              ※ 背番号のみで即座に開始可能
-            </span>
-          `
-          }
         </div>
 
-        <!-- 1〜9番 スタメンスロット一覧 -->
-        <div class="space-y-1.5">
+        <!-- 1〜9番 打順スロット一覧 -->
+        <div class="space-y-1.5 max-h-[46vh] overflow-y-auto pr-1">
           ${currentLineup
-            .map((slot, index) => {
-              return `
+            .map((slot, index) => `
               <div class="flex items-center justify-between bg-slate-950/80 border border-slate-800 hover:border-slate-700 px-2.5 py-1.5 rounded-xl text-xs gap-2">
-                <div class="flex items-center gap-2 min-w-[50px]">
+                <div class="flex items-center gap-1 min-w-[36px]">
                   <span class="font-black text-amber-400 text-sm font-mono">${index + 1}</span>
                   <span class="text-[10px] text-slate-500">番</span>
                 </div>
@@ -161,49 +140,50 @@ export class RosterViewComponent {
                 <!-- 守備位置セレクタ -->
                 <select class="select-slot-pos bg-slate-900 border border-slate-700 text-slate-200 text-xs font-bold rounded px-1.5 py-1 focus:outline-none focus:border-emerald-500" data-order="${index}">
                   ${POSITIONS.map(
-                    (p) => `<option value="${p.id}" ${slot.pos === p.id ? "selected" : ""}>${p.id} (${p.name.split(" ")[0]})</option>`
+                    (p) => `<option value="${p.id}" ${slot.pos === p.id ? "selected" : ""}>${p.id}</option>`
                   ).join("")}
                 </select>
 
-                <!-- 背番号 ＆ 選手名表示・編集ボタン -->
-                <button type="button" class="btn-open-slot-edit flex-1 flex items-center justify-between bg-slate-900/90 hover:bg-slate-800 px-2 py-1 rounded border border-slate-700 text-left transition" data-order="${index}">
+                <!-- 背番号 ＆ 氏名 -->
+                <button type="button" class="btn-open-slot-edit flex-1 flex items-center justify-between bg-slate-900/90 hover:bg-slate-800 px-2.5 py-1 rounded border border-slate-700 text-left transition" data-order="${index}">
                   <div class="flex items-center gap-2">
                     <span class="bg-slate-800 text-emerald-400 font-mono font-black text-xs px-1.5 py-0.5 rounded border border-slate-700">
                       #${slot.number || "-"}
                     </span>
-                    <span class="font-bold text-slate-200 truncate max-w-[120px]">
+                    <span class="font-bold text-slate-200 truncate max-w-[130px]">
                       ${slot.name || "選手未指定"}
                     </span>
                   </div>
                   <span class="text-[10px] text-slate-400">変更 ▾</span>
                 </button>
               </div>
-            `;
-            })
+            `)
             .join("")}
         </div>
 
-        <!-- 自チームの場合: 下部にベンチ選手「背番号バッジ」一覧を表示（タップで配置） -->
+        <!-- 自チームの場合: ベンチ名簿バッジ一覧 -->
         ${
           isMyTeam
             ? `
-          <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+          <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-1">
             <div class="flex items-center justify-between text-[11px]">
-              <span class="font-bold text-slate-300">👥 ベンチ登録選手（タップして空き枠へ割当）:</span>
-              <span class="text-[10px] text-slate-500">計 ${this.roster.length} 名</span>
+              <span class="font-bold text-slate-400">👥 名簿から打順へ割当:</span>
+              <button type="button" id="btn-copy-prev-order" class="text-[10px] text-emerald-400 hover:underline">
+                標準オーダーで全自動配置
+              </button>
             </div>
-            <div class="flex flex-wrap gap-1.5" id="bench-badges-list">
+            <div class="flex flex-wrap gap-1 max-h-[85px] overflow-y-auto">
               ${this.roster
                 .map((p) => {
                   const isAssigned = this.myLineup.some((slot) => slot.playerId === p.id);
                   return `
-                  <button type="button" class="btn-bench-badge px-2 py-1 rounded-lg text-xs font-bold border transition flex items-center gap-1 ${
+                  <button type="button" class="btn-bench-badge px-2 py-0.5 rounded text-[11px] font-bold border transition flex items-center gap-1 ${
                     isAssigned
-                      ? "bg-slate-800/40 border-slate-800 text-slate-600 opacity-60"
+                      ? "bg-slate-800/40 border-slate-800 text-slate-600 opacity-50"
                       : "bg-slate-800 border-slate-700 text-emerald-400 hover:bg-emerald-950/50 hover:border-emerald-600 active:scale-95"
-                  }" data-player-id="${p.id}" ${isAssigned ? "disabled" : ""}>
+                  }" data-player-id="${p.id}">
                     <span class="font-mono font-black">#${p.number}</span>
-                    <span class="text-[11px] text-slate-200">${p.name.split(" ")[0]}</span>
+                    <span class="text-slate-200">${p.name.split(" ")[0]}</span>
                   </button>
                 `;
                 })
@@ -214,8 +194,8 @@ export class RosterViewComponent {
             : ""
         }
 
-        <!-- 決定して試合に反映するボタン -->
-        <button type="button" id="btn-apply-lineup" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-extrabold py-2.5 rounded-xl text-xs shadow-lg transition flex items-center justify-center gap-1">
+        <!-- 決定・試合反映ボタン -->
+        <button type="button" id="btn-apply-lineup" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black py-2.5 rounded-xl text-xs shadow-lg transition flex items-center justify-center gap-1.5">
           <span>✓ このオーダーを試合に反映する</span>
         </button>
       </div>
@@ -225,27 +205,23 @@ export class RosterViewComponent {
   renderRosterTab() {
     return `
       <div class="space-y-3">
-        <!-- 名簿操作アクションバー -->
         <div class="flex items-center justify-between gap-2">
           <button type="button" id="btn-open-add-player" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow transition">
             <span>＋ 選手を追加</span>
           </button>
-
           <button type="button" id="btn-open-batch-import" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 border border-sky-900/50 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow transition">
-            <span>📥 LINE・テキスト一括取込</span>
+            <span>📥 テキスト一括取込</span>
           </button>
         </div>
 
-        <!-- 選手一覧テーブル -->
-        <div class="overflow-x-auto max-h-[50vh] overflow-y-auto">
+        <div class="overflow-x-auto max-h-[50vh] overflow-y-auto rounded-xl border border-slate-800">
           <table class="w-full text-left text-xs border-collapse">
             <thead class="bg-slate-950 sticky top-0 border-b border-slate-800 text-[10px] text-slate-400">
               <tr>
                 <th class="py-1.5 px-2">背番号</th>
                 <th class="py-1.5 px-2">氏名</th>
                 <th class="py-1.5 px-1">学年</th>
-                <th class="py-1.5 px-1">投/打</th>
-                <th class="py-1.5 px-1">主守備</th>
+                <th class="py-1.5 px-1">守備</th>
                 <th class="py-1.5 px-2 text-right">操作</th>
               </tr>
             </thead>
@@ -254,12 +230,11 @@ export class RosterViewComponent {
                 .map(
                   (p, idx) => `
                 <tr class="hover:bg-slate-800/40">
-                  <td class="py-2 px-2 font-mono font-black text-emerald-400">#${p.number}</td>
-                  <td class="py-2 px-2 font-bold text-slate-200">${p.name}</td>
-                  <td class="py-2 px-1 text-slate-400">${p.grade}年</td>
-                  <td class="py-2 px-1 text-slate-400">${p.throws}/${p.bats}</td>
-                  <td class="py-2 px-1 font-bold text-amber-300">${p.pos}</td>
-                  <td class="py-2 px-2 text-right space-x-1">
+                  <td class="py-1.5 px-2 font-mono font-black text-emerald-400">#${p.number}</td>
+                  <td class="py-1.5 px-2 font-bold text-slate-200">${p.name}</td>
+                  <td class="py-1.5 px-1 text-slate-400">${p.grade}年</td>
+                  <td class="py-1.5 px-1 font-bold text-amber-300">${p.pos}</td>
+                  <td class="py-1.5 px-2 text-right">
                     <button type="button" class="btn-delete-player text-rose-400 hover:text-rose-300 text-[10px] px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-900" data-idx="${idx}">
                       削除
                     </button>
@@ -276,10 +251,8 @@ export class RosterViewComponent {
   }
 
   bindEvents() {
-    // 1. サブタブ切り替え (オーダー編成 ⇄ 団員名簿)
     const btnOrder = this.container.querySelector("#subtab-order");
     const btnRoster = this.container.querySelector("#subtab-roster");
-
     if (btnOrder) {
       btnOrder.addEventListener("click", () => {
         this.activeSubTab = "order";
@@ -287,7 +260,6 @@ export class RosterViewComponent {
         this.bindEvents();
       });
     }
-
     if (btnRoster) {
       btnRoster.addEventListener("click", () => {
         this.activeSubTab = "roster";
@@ -296,7 +268,6 @@ export class RosterViewComponent {
       });
     }
 
-    // 閉じるボタン
     const btnClose = this.container.querySelector("#btn-close-roster-view");
     if (btnClose) {
       btnClose.addEventListener("click", () => {
@@ -304,7 +275,6 @@ export class RosterViewComponent {
       });
     }
 
-    // 2. オーダー編成タブ内のイベント
     if (this.activeSubTab === "order") {
       this.bindOrderEvents();
     } else {
@@ -313,10 +283,19 @@ export class RosterViewComponent {
   }
 
   bindOrderEvents() {
-    // チーム切り替え
+    // 攻守トグル
+    const btnSide = this.container.querySelector("#btn-toggle-attack-side");
+    if (btnSide) {
+      btnSide.addEventListener("click", () => {
+        this.myTeamSide = this.myTeamSide === "away" ? "home" : "away";
+        this.render();
+        this.bindEvents();
+      });
+    }
+
+    // チーム切替
     const btnMy = this.container.querySelector("#team-switch-my");
     const btnOpp = this.container.querySelector("#team-switch-opp");
-
     if (btnMy) {
       btnMy.addEventListener("click", () => {
         this.targetTeam = "my";
@@ -332,7 +311,7 @@ export class RosterViewComponent {
       });
     }
 
-    // 前回オーダー呼出
+    // デフォルト一括配置
     const btnCopy = this.container.querySelector("#btn-copy-prev-order");
     if (btnCopy) {
       btnCopy.addEventListener("click", () => {
@@ -342,7 +321,7 @@ export class RosterViewComponent {
       });
     }
 
-    // 守備位置変更セレクト
+    // 守備位置セレクト
     this.container.querySelectorAll(".select-slot-pos").forEach((sel) => {
       sel.addEventListener("change", (e) => {
         const orderIdx = parseInt(e.target.getAttribute("data-order"), 10);
@@ -353,9 +332,9 @@ export class RosterViewComponent {
       });
     });
 
-    // スロット編集（相手チームならテンキー起動、自チームなら選択）
+    // スロット編集（相手: テンキー / 自: 名簿選択）
     this.container.querySelectorAll(".btn-open-slot-edit").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
+      btn.addEventListener("click", () => {
         const orderIdx = parseInt(btn.getAttribute("data-order"), 10);
         if (this.targetTeam === "opp") {
           this.openTenkeyModal(orderIdx);
@@ -365,14 +344,13 @@ export class RosterViewComponent {
       });
     });
 
-    // ベンチバッジタップで空きスロットへ自動配置
+    // ベンチバッジタップで空き枠または先頭へ割当
     this.container.querySelectorAll(".btn-bench-badge").forEach((btn) => {
       btn.addEventListener("click", () => {
         const pId = btn.getAttribute("data-player-id");
         const player = this.roster.find((p) => p.id === pId);
         if (!player) return;
 
-        // 最初の空きスロットを探す
         const emptyIdx = this.myLineup.findIndex((slot) => !slot.playerId);
         const targetIdx = emptyIdx !== -1 ? emptyIdx : 0;
 
@@ -389,7 +367,7 @@ export class RosterViewComponent {
       });
     });
 
-    // 試合への反映ボタン
+    // 試合への反映
     const btnApply = this.container.querySelector("#btn-apply-lineup");
     if (btnApply) {
       btnApply.addEventListener("click", () => {
@@ -399,7 +377,6 @@ export class RosterViewComponent {
   }
 
   bindRosterEvents() {
-    // 選手追加
     const btnAdd = this.container.querySelector("#btn-open-add-player");
     if (btnAdd) {
       btnAdd.addEventListener("click", () => {
@@ -407,9 +384,9 @@ export class RosterViewComponent {
         if (!numStr) return;
         const nameStr = prompt("選手氏名を入力してください (例: 高橋 翔太):");
         if (!nameStr) return;
-        const posStr = prompt("主な守備位置を入力してください (例: 投, 捕, 内, 外):", "投") || "投";
+        const posStr = prompt("守備位置 (例: 投, 捕, 一, 外):", "投") || "投";
 
-        const newPlayer = {
+        this.roster.push({
           id: `p_${Date.now()}`,
           number: parseInt(numStr, 10) || 99,
           name: nameStr.trim(),
@@ -417,28 +394,23 @@ export class RosterViewComponent {
           throws: "右",
           bats: "右",
           pos: posStr.trim()
-        };
+        });
 
-        this.roster.push(newPlayer);
         this.saveRoster();
         this.render();
         this.bindEvents();
       });
     }
 
-    // LINE・テキスト一括取込
     const btnBatch = this.container.querySelector("#btn-open-batch-import");
     if (btnBatch) {
       btnBatch.addEventListener("click", () => {
-        const text = prompt(
-          "LINEやメモ帳のテキストを貼り付けてください:\n（形式: 背番号, 氏名, 学年, 守備）\n例:\n1, 山田 太郎, 6, 投\n2, 佐藤 健一, 6, 捕\n7, 金子 真怜, 5, 中"
-        );
+        const text = prompt("テキストを貼り付けてください:\n例:\n1, 山田 太郎, 6, 投\n2, 佐藤 健一, 6, 捕");
         if (!text) return;
         this.importBatchText(text);
       });
     }
 
-    // 選手削除
     this.container.querySelectorAll(".btn-delete-player").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         const idx = parseInt(btn.getAttribute("data-idx"), 10);
@@ -456,48 +428,44 @@ export class RosterViewComponent {
     const slotEl = this.container.querySelector("#tenkey-modal-slot");
     if (!slotEl) return;
 
+    slotEl.className = "fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4";
     slotEl.innerHTML = `
-      <div class="modal-backdrop">
-        <div class="modal-content max-w-[280px] space-y-3">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h3 class="text-xs font-black text-amber-400">${orderIdx + 1}番 相手背番号入力</h3>
-            <button type="button" id="btn-tenkey-close" class="text-slate-400 text-sm">✕</button>
-          </div>
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[280px] p-3.5 shadow-2xl space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <h3 class="text-xs font-black text-amber-400">${orderIdx + 1}番 相手背番号入力</h3>
+          <button type="button" id="btn-tenkey-close" class="text-slate-400 hover:text-white text-base">✕</button>
+        </div>
 
-          <!-- 入力ディスプレイ -->
-          <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center font-mono font-black text-2xl text-white">
-            # <span id="tenkey-display">_</span>
-          </div>
+        <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center font-mono font-black text-2xl text-white">
+          # <span id="tenkey-display">_</span>
+        </div>
 
-          <!-- 大型数字テンキー -->
-          <div class="grid grid-cols-3 gap-2" id="tenkey-pad">
-            ${[1, 2, 3, 4, 5, 6, 7, 8, 9, "C", 0, "OK"]
-              .map((key) => {
-                const isAction = key === "C" || key === "OK";
-                const bgClass =
-                  key === "OK"
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold"
-                    : key === "C"
-                    ? "bg-rose-900/80 hover:bg-rose-800 text-rose-200 font-bold"
-                    : "bg-slate-800 hover:bg-slate-700 text-white font-bold";
-                return `
-                <button type="button" class="btn-tenkey-key py-3 rounded-xl text-base shadow active:scale-95 transition ${bgClass}" data-key="${key}">
-                  ${key}
-                </button>
-              `;
-              })
-              .join("")}
-          </div>
+        <div class="grid grid-cols-3 gap-1.5" id="tenkey-pad">
+          ${[1, 2, 3, 4, 5, 6, 7, 8, 9, "C", 0, "OK"]
+            .map((key) => {
+              const bgClass =
+                key === "OK"
+                  ? "bg-emerald-600 hover:bg-emerald-500 text-white font-black"
+                  : key === "C"
+                  ? "bg-rose-900/80 hover:bg-rose-800 text-rose-200 font-bold"
+                  : "bg-slate-800 hover:bg-slate-700 text-white font-bold";
+              return `
+              <button type="button" class="btn-tenkey-key py-2.5 rounded-xl text-sm shadow active:scale-95 transition ${bgClass}" data-key="${key}">
+                ${key}
+              </button>
+            `;
+            })
+            .join("")}
         </div>
       </div>
     `;
-    slotEl.classList.remove("hidden");
 
-    // テンキーの入力処理
     const displayEl = slotEl.querySelector("#tenkey-display");
     const closeBtn = slotEl.querySelector("#btn-tenkey-close");
     if (closeBtn) {
-      closeBtn.addEventListener("click", () => slotEl.classList.add("hidden"));
+      closeBtn.addEventListener("click", () => {
+        slotEl.className = "hidden";
+      });
     }
 
     slotEl.querySelectorAll(".btn-tenkey-key").forEach((btn) => {
@@ -509,9 +477,9 @@ export class RosterViewComponent {
           const num = parseInt(this.tenkeyValue, 10);
           if (!isNaN(num)) {
             this.oppLineup[this.tenkeyTargetSlot].number = num;
-            this.oppLineup[this.tenkeyTargetSlot].name = `背番号 ${num}`;
+            this.oppLineup[this.tenkeyTargetSlot].name = `${num}番 打者`;
           }
-          slotEl.classList.add("hidden");
+          slotEl.className = "hidden";
           this.render();
           this.bindEvents();
           return;
@@ -527,12 +495,31 @@ export class RosterViewComponent {
     });
   }
 
+  openPlayerSelectPrompt(orderIdx) {
+    const listStr = this.roster.map((p, idx) => `${idx + 1}: #${p.number} ${p.name} (${p.pos})`).join("\n");
+    const selectIdx = prompt(`【${orderIdx + 1}番打者】割り当てる番号を入力してください:\n${listStr}`);
+    if (!selectIdx) return;
+
+    const idx = parseInt(selectIdx, 10) - 1;
+    const player = this.roster[idx];
+    if (player) {
+      this.myLineup[orderIdx] = {
+        order: orderIdx + 1,
+        playerId: player.id,
+        number: player.number,
+        name: player.name,
+        pos: player.pos
+      };
+      this.render();
+      this.bindEvents();
+    }
+  }
+
   importBatchText(text) {
     const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
     let count = 0;
 
     lines.forEach((line) => {
-      // カンマ、空白、タブなどで分割
       const parts = line.split(/[,、\s\t]+/).filter(Boolean);
       if (parts.length >= 2) {
         const num = parseInt(parts[0], 10);
@@ -562,46 +549,46 @@ export class RosterViewComponent {
     }
   }
 
-  openPlayerSelectPrompt(orderIdx) {
-    const listStr = this.roster.map((p, idx) => `${idx + 1}: #${p.number} ${p.name} (${p.pos})`).join("\n");
-    const selectIdx = prompt(`【${orderIdx + 1}番打者】割り当てる選手の番号を入力してください:\n${listStr}`);
-    if (!selectIdx) return;
-
-    const idx = parseInt(selectIdx, 10) - 1;
-    const player = this.roster[idx];
-    if (player) {
-      this.myLineup[orderIdx] = {
-        order: orderIdx + 1,
-        playerId: player.id,
-        number: player.number,
-        name: player.name,
-        pos: player.pos
-      };
-      this.render();
-      this.bindEvents();
-    }
-  }
-
+  /**
+   * GameState の teams (away / home) に9人オーダーを完全反映し、即座に同期
+   */
   applyLineupToGame() {
     const state = this.gameState.getState();
-    const currentSlot = this.myLineup[0];
+    if (!state.teams) return;
 
-    // 現在の打者・投手を反映
-    if (currentSlot) {
-      state.currentBatter = {
-        order: 1,
-        number: currentSlot.number,
-        name: currentSlot.name,
-        pos: currentSlot.pos
-      };
-    }
+    const awayLineup = this.myTeamSide === "away" ? this.myLineup : this.oppLineup;
+    const homeLineup = this.myTeamSide === "home" ? this.myLineup : this.oppLineup;
 
-    const pitcherSlot = this.myLineup.find((s) => s.pos === "投") || this.myLineup[0];
-    if (pitcherSlot) {
-      state.currentPitcher = {
-        number: pitcherSlot.number,
-        name: pitcherSlot.name
-      };
+    const awayPitcher = awayLineup.find((s) => s.pos === "投") || awayLineup[0];
+    const homePitcher = homeLineup.find((s) => s.pos === "投") || homeLineup[0];
+
+    // 先攻チームへの反映
+    state.teams.away.roster = awayLineup.map((s, idx) => ({
+      order: idx + 1,
+      number: s.number,
+      name: s.name,
+      pos: s.pos
+    }));
+    state.teams.away.pitcher = {
+      name: awayPitcher ? awayPitcher.name : "先発 投手",
+      number: awayPitcher ? awayPitcher.number : 1
+    };
+
+    // 後攻チームへの反映
+    state.teams.home.roster = homeLineup.map((s, idx) => ({
+      order: idx + 1,
+      number: s.number,
+      name: s.name,
+      pos: s.pos
+    }));
+    state.teams.home.pitcher = {
+      name: homePitcher ? homePitcher.name : "相手 投手",
+      number: homePitcher ? homePitcher.number : 1
+    };
+
+    // 現在の対戦（打者・投手）を最新のオーダーから即座に再計算
+    if (typeof this.gameState.syncCurrentMatchup === "function") {
+      this.gameState.syncCurrentMatchup();
     }
 
     this.saveLineup("my", this.myLineup);
