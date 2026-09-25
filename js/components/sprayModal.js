@@ -1,11 +1,11 @@
 /**
  * js/components/sprayModal.js
- * 打球入力モーダル ＆ Canvasスプレーチャート（完全フリーズ防止・超軽量版）
+ * 打球入力モーダル ＆ Canvasスプレーチャート
  * 
  * 改善点:
- * - Androidフリーズの主因「backdrop-blur」を完全撤廃し、軽量な高視認性ブラックオーバーレイに変更
- * - 高DPIスマホでのCanvas描画負荷を最小化（過去プロットを直近15件に制限し即時描画）
- * - touchstart/click の重複発火を防止し、0秒でモーダルを開くゼロ遅延レスポンス
+ * - 打球着弾判定（detectArea）に「投手前 (ピッチャー)」を追加
+ * - 「捕手前 (キャッチャー)」の判定領域を最適化し、選びやすく調整
+ * - Canvas上のピッチャーマウンドを描画し、タップ位置の視認性を向上
  */
 
 const RESULT_COLORS = {
@@ -47,7 +47,6 @@ export class SprayModalComponent {
   }
 
   render() {
-    // backdrop-blur を完全撤廃し、端末負荷ゼロの bg-black/90 に変更
     this.container.innerHTML = `
       <div id="spray-modal-backdrop" class="fixed inset-0 bg-black/90 flex items-center justify-center p-2 sm:p-4 z-50 select-none overflow-y-auto">
         <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg md:max-w-3xl p-3 shadow-2xl space-y-2">
@@ -77,7 +76,7 @@ export class SprayModalComponent {
               <div class="flex items-center justify-between w-full text-[10px] text-slate-400 px-1">
                 <span>※ グラウンドをタップ</span>
                 <span id="label-detected-area" class="text-emerald-300 font-bold bg-emerald-950 border border-emerald-800 px-1.5 py-0.5 rounded">
-                  二塁手
+                  二塁手 (セカンド)
                 </span>
               </div>
             </div>
@@ -167,7 +166,7 @@ export class SprayModalComponent {
     if (closeBtn) closeBtn.addEventListener("click", () => this.close());
     if (cancelBtn) cancelBtn.addEventListener("click", () => this.close());
 
-    // スマホでのポインターイベント（重複を防止）
+    // スマホ・PC共通のポインターイベント
     if (this.canvas) {
       const handlePointer = (e) => {
         e.preventDefault();
@@ -318,6 +317,16 @@ export class SprayModalComponent {
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    // ピッチャーマウンド
+    const moundX = homeX;
+    const moundY = homeY - baseDist * 0.707;
+    ctx.beginPath();
+    ctx.arc(moundX, moundY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(moundX - 2, moundY - 1, 4, 2);
+
     // ベース
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(firstX - 3, firstY - 3, 6, 6);
@@ -325,7 +334,7 @@ export class SprayModalComponent {
     ctx.fillRect(thirdX - 3, thirdY - 3, 6, 6);
     ctx.fillRect(homeX - 3, homeY - 3, 6, 6);
 
-    // 過去の打球（最大直近15件のみ高速描画してフリーズ防止）
+    // 過去の打球（直近15件のみ高速描画）
     const state = this.gameState.getState();
     if (state.history && state.history.length > 0) {
       const recentHits = state.history.slice(-15);
@@ -366,17 +375,26 @@ export class SprayModalComponent {
   }
 
   detectArea(x, y) {
-    if (y > 0.82) return "捕手前";
+    // 捕手前 (本塁周辺)
+    if (y > 0.81) return "捕手前 (キャッチャー)";
+
+    // 投手前 (マウンド周辺: 中央付近)
+    if (y >= 0.64 && y <= 0.81 && x >= 0.40 && x <= 0.60) {
+      return "投手前 (ピッチャー)";
+    }
+
+    // 外野エリア
     if (y < 0.52) {
       if (x < 0.36) return "左翼手 (レフト)";
       if (x > 0.64) return "右翼手 (ライト)";
       return "中堅手 (センター)";
-    } else {
-      if (x < 0.38) return "三塁手 (サード)";
-      if (x < 0.50) return "遊撃手 (ショート)";
-      if (x < 0.62) return "二塁手 (セカンド)";
-      return "一塁手 (ファースト)";
-    }
+    } 
+    
+    // 内野エリア
+    if (x < 0.38) return "三塁手 (サード)";
+    if (x < 0.50) return "遊撃手 (ショート)";
+    if (x < 0.62) return "二塁手 (セカンド)";
+    return "一塁手 (ファースト)";
   }
 
   open({ course = "中央", onComplete }) {
@@ -392,12 +410,11 @@ export class SprayModalComponent {
     if (courseLabel) courseLabel.textContent = course;
 
     const areaLabel = this.container.querySelector("#label-detected-area");
-    if (areaLabel) areaLabel.textContent = "二塁手";
+    if (areaLabel) areaLabel.textContent = "二塁手 (セカンド)";
 
     this.applyButtonStyles();
     this.drawField();
 
-    // 0秒で即座に表示（setTimeout待ちを完全撤廃）
     this.container.classList.remove("hidden");
   }
 
