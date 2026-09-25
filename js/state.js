@@ -56,18 +56,20 @@ export class GameState {
           name: "先攻チーム",
           currentBatterIndex: 0, // 0〜8 (1番〜9番)
           pitcher: { name: "先発 投手", number: 1 },
+          pitcherCounts: {}, // 投手名(または背番号)ごとの投球数 { "山田 太郎": 35 }
           roster: createRoster("先攻")
         },
         home: {
           name: "後攻チーム",
           currentBatterIndex: 0,
           pitcher: { name: "相手 投手", number: 1 },
+          pitcherCounts: {}, // 投手名(または背番号)ごとの投球数
           roster: createRoster("後攻")
         }
       },
 
       currentBatter: { name: "1番 打者", order: 1, pos: "投" },
-      currentPitcher: { name: "相手 投手" },
+      currentPitcher: { name: "相手 投手", pitchCount: 0 },
 
       // 1球ごとのログ（履歴自身はスナップショットから除外）
       history: []
@@ -118,12 +120,14 @@ export class GameState {
         away: {
           ...this.state.teams.away,
           currentBatterIndex: this.state.teams.away.currentBatterIndex,
-          pitcher: { ...this.state.teams.away.pitcher }
+          pitcher: { ...this.state.teams.away.pitcher },
+          pitcherCounts: { ...this.state.teams.away.pitcherCounts }
         },
         home: {
           ...this.state.teams.home,
           currentBatterIndex: this.state.teams.home.currentBatterIndex,
-          pitcher: { ...this.state.teams.home.pitcher }
+          pitcher: { ...this.state.teams.home.pitcher },
+          pitcherCounts: { ...this.state.teams.home.pitcherCounts }
         }
       },
       currentBatter: { ...this.state.currentBatter },
@@ -143,7 +147,10 @@ export class GameState {
       bsoBefore: `${this.state.balls}-${this.state.strikes}-${this.state.outs}`
     };
 
+    // 試合全体の投球数を加算
     this.state.pitchCount += 1;
+    // 現在マウンドに立っている投手の投球数を加算
+    this.incrementCurrentPitcherCount();
 
     switch (resultType) {
       case "ボール":
@@ -248,9 +255,45 @@ export class GameState {
       pos: currentRosterBatter.pos || "打"
     };
 
+    const pName = fieldingTeam.pitcher ? fieldingTeam.pitcher.name : `${fieldingTeam.name} 投手`;
+    if (!fieldingTeam.pitcherCounts) {
+      fieldingTeam.pitcherCounts = {};
+    }
+    const currentCount = fieldingTeam.pitcherCounts[pName] || 0;
+
     this.state.currentPitcher = {
-      name: fieldingTeam.pitcher ? fieldingTeam.pitcher.name : `${fieldingTeam.name} 投手`
+      name: pName,
+      number: fieldingTeam.pitcher ? fieldingTeam.pitcher.number : undefined,
+      pitchCount: currentCount
     };
+  }
+
+  /**
+   * 現在守備中の投手の投球数を +1
+   */
+  incrementCurrentPitcherCount() {
+    if (!this.state.teams) return;
+    const fieldingTeam = this.state.isTop ? this.state.teams.home : this.state.teams.away;
+    if (!fieldingTeam.pitcherCounts) {
+      fieldingTeam.pitcherCounts = {};
+    }
+    const pName = fieldingTeam.pitcher ? fieldingTeam.pitcher.name : `${fieldingTeam.name} 投手`;
+    fieldingTeam.pitcherCounts[pName] = (fieldingTeam.pitcherCounts[pName] || 0) + 1;
+
+    // 現在の投手の投球数表示を同期
+    if (this.state.currentPitcher) {
+      this.state.currentPitcher.pitchCount = fieldingTeam.pitcherCounts[pName];
+    }
+  }
+
+  /**
+   * 現在守備中の投手の球数を取得（スコアボード表示用）
+   */
+  getCurrentPitcherCount() {
+    if (this.state.currentPitcher && typeof this.state.currentPitcher.pitchCount === "number") {
+      return this.state.currentPitcher.pitchCount;
+    }
+    return 0;
   }
 
   /**
