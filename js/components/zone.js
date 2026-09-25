@@ -241,7 +241,15 @@ export class ZoneComponent {
 
   updatePitchCounts(state) {
     const counts = {};
+    const currentPitcherName = state.currentPitcher ? state.currentPitcher.name : null;
+
     state.history.forEach((h) => {
+      // 登板中投手が投げた投球のみをカウント対象に抽出
+      const pitcherOfPitch = h.snapshot && h.snapshot.currentPitcher ? h.snapshot.currentPitcher.name : null;
+      if (currentPitcherName && pitcherOfPitch && pitcherOfPitch !== currentPitcherName) {
+        return;
+      }
+
       const c = h.pitchEvent.course;
       counts[c] = (counts[c] || 0) + 1;
     });
