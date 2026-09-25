@@ -214,12 +214,20 @@ export class RunnerDiamondComponent {
       return;
     }
 
+    // 登板中投手の球数と名前を取得
+    const pitcherCount = (state.currentPitcher && typeof state.currentPitcher.pitchCount === "number")
+      ? state.currentPitcher.pitchCount
+      : 0;
+    const pitcherName = (state.currentPitcher && state.currentPitcher.name)
+      ? state.currentPitcher.name
+      : "投手";
+
     // 直近5件を逆順（最新が上）で表示
     const recent = state.history.slice(-5).reverse();
     this.logContainer.innerHTML = `
       <div class="flex items-center justify-between border-b border-slate-800 pb-1 mb-1.5">
         <span class="text-slate-400 font-bold text-[11px]">📋 直近の投球ログ</span>
-        <span class="text-emerald-400 text-[10px]">総投球数: ${state.pitchCount}球</span>
+        <span class="text-emerald-400 text-[10px] font-bold font-mono">${pitcherName}: ${pitcherCount}球</span>
       </div>
       <div class="space-y-1">
         ${recent.map((item, idx) => {
