@@ -72,27 +72,14 @@
       </main>
     </div>
  
-    <!-- 追加イメージ：誤操作防止の安全ダイアログ -->
-<div id="reset-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-  <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 max-w-xs w-full shadow-2xl space-y-3 text-center">
-    <div class="text-3xl">⚠️</div>
-    <h3 class="text-sm font-black text-white">試合を初期化しますか？</h3>
-    <p class="text-xs text-slate-400">現在のスコア、カウント、投球履歴はすべて消去され、1回表・0球に戻ります。</p>
-    <div class="flex gap-2 pt-2">
-      <button id="btn-cancel-reset" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-xl text-xs font-bold">
-        キャンセル
-      </button>
-      <button id="btn-confirm-reset" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-xl text-xs font-black shadow">
-        初期化する
-      </button>
-    </div>
-  </div>
-</div>
-  </div>
-
-  <!-- 3. モーダルスロット -->
+<!-- 3. モーダルスロット -->
   <div id="spray-modal-slot" class="hidden"></div>
   <div id="roster-modal-slot" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 p-3 overflow-y-auto flex items-center justify-center"></div>
+
+  <!-- リセット確認ダイアログ（ここに置くのが最も安全です） -->
+  <div id="reset-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+    ...（中身はそのまま）...
+  </div>
 
   <!-- 4. ES Modules エントリーポイント -->
   <script type="module" src="js/app.js"></script>
