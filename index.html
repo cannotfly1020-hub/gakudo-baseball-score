@@ -15,8 +15,8 @@
 
 <body class="min-h-screen bg-[#0b1329] text-slate-100 font-sans select-none flex flex-col items-center p-2 sm:p-3">
 
-  <!-- 1. アプリヘッダー (PC・スマホ両対応の美しい2段レイアウト) -->
-  <header class="w-full max-w-lg lg:max-w-6xl mb-2 flex flex-col gap-2 border-b border-slate-800 pb-2 flex-shrink-0">
+  <!-- 1. アプリヘッダー (PC・スマホ両対応の2段レイアウト) -->
+  <header class="w-full max-w-full md:max-w-7xl mb-2 flex flex-col gap-2 border-b border-slate-800 pb-2 flex-shrink-0">
     <!-- 上段：タイトル＆バージョン -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
@@ -27,48 +27,58 @@
       <p class="text-[10px] text-slate-500 font-mono hidden sm:block">gakudo-baseball-score</p>
     </div>
 
-<!-- 下段：4等分均等アクションボタン（PC・スマホともに高さ・幅が完全統一） -->
-<div class="grid grid-cols-4 gap-2 w-full max-w-full sm:max-w-xl">
-  <button id="btn-open-roster" type="button" class="h-9 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1.5 shadow transition">
-    <span>📋</span>
-    <span class="truncate">オーダー</span>
-  </button>
-  <button id="btn-export-csv" type="button" class="h-9 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-900/50 flex items-center justify-center gap-1.5 shadow transition" title="公式スコアCSVを保存">
-    <span>📤</span>
-    <span class="truncate">CSV</span>
-  </button>
-  <button id="btn-undo" type="button" class="h-9 px-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 shadow transition">
-    <span>↺</span>
-    <span class="truncate">1球取消</span>
-  </button>
-  <button id="btn-reset-game" type="button" class="h-9 px-2 bg-rose-950/80 hover:bg-rose-900 active:scale-95 text-rose-300 text-xs font-bold rounded-lg border border-rose-800/80 flex items-center justify-center gap-1.5 shadow transition" title="試合を最初からやり直す">
-    <span>🗑</span>
-    <span class="truncate">リセット</span>
-  </button>
-</div>
+    <!-- 下段：4等分均等アクションボタン（PC・スマホともに高さ・幅が完全統一） -->
+    <div class="grid grid-cols-4 gap-2 w-full max-w-full sm:max-w-xl">
+      <button id="btn-open-roster" type="button" class="h-9 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1.5 shadow transition">
+        <span>📋</span>
+        <span class="truncate">オーダー</span>
+      </button>
+      <button id="btn-export-csv" type="button" class="h-9 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-900/50 flex items-center justify-center gap-1.5 shadow transition" title="公式スコアCSVを保存">
+        <span>📤</span>
+        <span class="truncate">CSV</span>
+      </button>
+      <button id="btn-undo" type="button" class="h-9 px-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 shadow transition">
+        <span>↺</span>
+        <span class="truncate">1球取消</span>
+      </button>
+      <button id="btn-reset-game" type="button" class="h-9 px-2 bg-rose-950/80 hover:bg-rose-900 active:scale-95 text-rose-300 text-xs font-bold rounded-lg border border-rose-800/80 flex items-center justify-center gap-1.5 shadow transition" title="試合を最初からやり直す">
+        <span>🗑</span>
+        <span class="truncate">リセット</span>
+      </button>
+    </div>
+  </header>
 
+  <!-- 2. メインコンテンツ: PC(md以上)では左右均等2カラム、スマホでは縦1列 -->
+  <div class="w-full max-w-full md:max-w-7xl flex-1 flex flex-col md:flex-row gap-3 items-start justify-center">
+    
+    <!-- 【左カラム】試合状況（スコアボード ＆ ランナー・BSO・走者ボタン ＆ 投球ログ） -->
+    <div class="w-full md:w-1/2 flex flex-col gap-2.5">
+      <!-- ① スコアボード & 球数・タイマー管理 -->
+      <section id="scoreboard-slot" class="w-full">
+        <!-- scoreboard.js が描画 -->
+      </section>
 
-<!-- 【左カラム】試合状況（スコアボード ＆ ランナー・BSO・走者ボタン・投球ログ） -->
-<div class="w-full lg:w-1/2 flex flex-col gap-2.5 lg:overflow-y-auto pr-0 lg:pr-1">
-  <!-- ① スコアボード & 球数・タイマー管理 -->
-  <section id="scoreboard-slot" class="w-full flex-shrink-0">
-    <!-- scoreboard.js が描画 -->
-  </section>
+      <!-- ② 走者ダイアモンド & BSOカウントランプ & 走者イベントボタン -->
+      <section id="diamond-slot" class="w-full">
+        <!-- runnerDiamond.js が描画 -->
+      </section>
 
-  <!-- ② 走者ダイアモンド & BSOカウントランプ & 走者イベントボタン & 投球ログ -->
-  <section id="diamond-slot" class="w-full flex-1">
-    <!-- runnerDiamond.js が一括して描画 -->
-  </section>
-</div>
+      <!-- ③ 直近投球ログスロット（runnerDiamond.js が自動生成・更新） -->
+      <section id="log-slot" class="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 shadow-md text-xs w-full min-h-[60px]">
+        <!-- runnerDiamond.js がログテーブルを流し込み -->
+      </section>
+    </div>
 
-<!-- 【右カラム】投球入力コンソール（17分割盤面 & 判定ボタン） -->
-<div class="w-full lg:w-1/2 flex flex-col justify-start lg:overflow-y-auto pl-0 lg:pl-1">
-  <main class="w-full">
-    <section id="zone-slot">
-      <!-- zone.js がプロ仕様コンソールを描画 -->
-    </section>
-  </main>
-</div>
+    <!-- 【右カラム】投球入力コンソール（17分割盤面 & 判定ボタン） -->
+    <div class="w-full md:w-1/2 flex flex-col">
+      <main class="w-full">
+        <section id="zone-slot">
+          <!-- zone.js がプロ仕様コンソールを描画 -->
+        </section>
+      </main>
+    </div>
+
+  </div>
 
   <!-- 3. モーダルスロット -->
   <!-- 打球入力モーダル -->
