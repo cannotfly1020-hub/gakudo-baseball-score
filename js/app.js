@@ -1,12 +1,11 @@
 /**
  * js/app.js
- * アプリ全体の司令塔・エントリーポイント
+ * アプリ全体の司令塔・エントリーポイント（爆速起動・非同期復元版）
  * 
- * 担当役割:
- * - 各コンポーネント（Scoreboard, RunnerDiamond, Zone）のインスタンス化
- * - 状態管理インスタンス（GameState）の生成と各部品への受け渡し
- * - ヘッダー操作（アンドゥ・1球取消）のバインド
- * - 打球モーダル起動時のインターフェース予約
+ * 改善点:
+ * - IndexedDBの読み込み待ちによる起動フリーズ（1分待たされる現象）を根絶
+ * - コンポーネント生成を最優先で即時実行し、0秒で画面を描画
+ * - 過去データの復元は裏側で非同期かつタイムアウト付きで安全に実行
  */
 
 import { GameState } from "./state.js";
@@ -35,25 +34,14 @@ class BaseballApp {
     // 1. 状態管理（金庫）のインスタンス生成
     this.gameState = new GameState();
 
-    // 2. オフラインDB（IndexedDB）から前回の進行中データを自動復元確認
-    try {
-      const savedState = await dbStorage.loadActiveGame();
-      if (savedState && savedState.history && savedState.history.length > 0) {
-        this.gameState.state = savedState;
-        console.log("⚾️ 直前の試合データを復元しました");
-      }
-    } catch (e) {
-      console.warn("データ復元スキップ:", e);
-    }
-
-    // 3. DOM要素の受け皿（スロット）を取得
+    // 2. DOM要素の受け皿（スロット）を取得
     const scoreboardSlot = document.getElementById("scoreboard-slot");
     const diamondSlot = document.getElementById("diamond-slot");
     const zoneSlot = document.getElementById("zone-slot");
     const sprayModalSlot = document.getElementById("spray-modal-slot");
     const rosterSlot = document.getElementById("roster-modal-slot");
 
-    // 4. 各コンポーネントの初期化
+    // 3. 各コンポーネントを即時生成（待たずに0秒で画面を組み立てる）
     if (scoreboardSlot) {
       this.scoreboardComponent = new ScoreboardComponent(scoreboardSlot, this.gameState);
     }
@@ -76,18 +64,50 @@ class BaseballApp {
       });
     }
 
-    // 5. 1球ごとの完全オフライン自動保存リスナーを登録
-    this.gameState.subscribe((state) => {
-      dbStorage.saveActiveGame(state);
-    });
-
-    // 6. グローバル操作（ヘッダーのアンドゥ、オーダー、CSV出力）をバインド
+    // 4. グローバル操作（ヘッダーのアンドゥ、オーダー、CSV出力）をバインド
     this.bindGlobalActions();
 
-    // 7. 初期描画を全コンポーネントへ通知
+    // 5. 初期画面を全コンポーネントへ即時描画
     this.gameState.notify();
 
-    console.log("⚾️ gakudo-baseball-score 全モジュール連携完了");
+    // 6. 1球ごとの完全オフライン自動保存リスナーを登録
+    this.gameState.subscribe((state) => {
+      try {
+        dbStorage.saveActiveGame(state);
+      } catch (err) {
+        console.warn("自動保存エラー:", err);
+      }
+    });
+
+    // 7. オフラインDB（IndexedDB）からの復元は裏側で非同期実行（画面を絶対にブロックしない）
+    this.restoreSavedGameInBackground();
+
+    console.log("⚾️ gakudo-baseball-score 爆速起動完了");
+  }
+
+  /**
+   * 画面描画を邪魔しない裏側での安全データ復元（最大500msでタイムアウト）
+   */
+  async restoreSavedGameInBackground() {
+    try {
+      // 500ミリ秒以上応答がなければ諦めるタイムアウトガード
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("IndexedDBタイムアウト")), 500)
+      );
+
+      const savedState = await Promise.race([
+        dbStorage.loadActiveGame(),
+        timeoutPromise
+      ]);
+
+      if (savedState && savedState.history && savedState.history.length > 0) {
+        this.gameState.state = savedState;
+        this.gameState.notify();
+        console.log("⚾️ 直前の試合データを復元しました");
+      }
+    } catch (e) {
+      console.warn("データ復帰をスキップ（初期状態で開始）:", e.message || e);
+    }
   }
 
   /**
@@ -177,7 +197,6 @@ class BaseballApp {
         break;
 
       case "二塁打":
-        // 2塁打: 2塁・3塁走者は生還、1塁走者は3塁へ、打者は2塁へ
         if (state.runners[3]) this.gameState.addRun(1);
         if (state.runners[2]) this.gameState.addRun(1);
         state.runners[3] = state.runners[1] || false;
@@ -186,7 +205,6 @@ class BaseballApp {
         break;
 
       case "三塁打":
-        // 3塁打: 走者一掃
         let tripleRuns = 0;
         if (state.runners[1]) tripleRuns++;
         if (state.runners[2]) tripleRuns++;
@@ -196,7 +214,6 @@ class BaseballApp {
         break;
 
       case "本塁打":
-        // 本塁打: 走者全員生還 ＋ 打者得点
         let hrRuns = 1;
         if (state.runners[1]) hrRuns++;
         if (state.runners[2]) hrRuns++;
@@ -207,7 +224,6 @@ class BaseballApp {
 
       case "送りバント":
       case "スクイズ":
-        // 走者1つ進塁 ＋ 打者アウト
         this.gameState.handleOut();
         if (state.runners[3]) {
           state.runners[3] = false;
@@ -227,15 +243,12 @@ class BaseballApp {
         break;
     }
 
-    // ユーザー指定の追加得点がある場合
     if (runsFromPlay > 0 && type !== "本塁打") {
       this.gameState.addRun(runsFromPlay);
     }
 
-    // 打者完了のためBSOカウントをリセット
     this.gameState.resetCount();
 
-    // 1球履歴レコードの構築（CSV/JSON保存用）
     const pitchEvent = {
       pitchNum: state.pitchCount,
       inningStr: `${state.inning}回${state.isTop ? "表" : "裏"}`,
