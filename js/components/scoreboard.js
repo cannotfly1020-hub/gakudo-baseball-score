@@ -76,7 +76,7 @@ export class ScoreboardComponent {
           </div>
 
           <div class="flex items-center gap-1.5">
-            <span class="text-[10px] text-slate-400">投球数:</span>
+            <span id="pitcher-name-badge" class="text-[10px] text-slate-400 font-bold truncate max-w-[80px]">投手:</span>
             <div class="flex items-baseline gap-0.5 font-mono">
               <span id="current-pitch-count" class="text-base sm:text-lg font-black text-white">0</span>
               <span class="text-slate-500 text-xs">/</span>
@@ -265,17 +265,26 @@ export class ScoreboardComponent {
     const targetEl = this.container.querySelector("#target-pitch-limit");
     const limitBtn = this.container.querySelector("#btn-toggle-pitch-limit");
     const badgeEl = this.container.querySelector("#pitch-status-badge");
+    const pitcherBadge = this.container.querySelector("#pitcher-name-badge");
 
-    if (countEl) countEl.textContent = state.pitchCount;
+    // 全体の球数ではなく「現在マウンドに立っている投手の投球数」を取得
+    const pitcherCount = (state.currentPitcher && typeof state.currentPitcher.pitchCount === "number")
+      ? state.currentPitcher.pitchCount
+      : 0;
+
+    if (countEl) countEl.textContent = pitcherCount;
     if (targetEl) targetEl.textContent = state.pitchLimit;
     if (limitBtn) limitBtn.textContent = `${state.pitchLimit}球`;
+    if (pitcherBadge && state.currentPitcher) {
+      pitcherBadge.textContent = `${state.currentPitcher.name}:`;
+    }
 
     if (!badgeEl || !countEl) return;
 
     countEl.classList.remove("text-amber-400", "text-rose-500");
     badgeEl.className = "text-[9px] px-1.5 py-0.2 rounded font-bold";
 
-    const remaining = state.pitchLimit - state.pitchCount;
+    const remaining = state.pitchLimit - pitcherCount;
 
     if (remaining <= 0) {
       countEl.classList.add("text-rose-500");
