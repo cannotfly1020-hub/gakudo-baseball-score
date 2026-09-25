@@ -49,59 +49,26 @@
 
 
 <!-- 【左カラム】試合状況（スコアボード ＆ ランナー・BSO・走者ボタン・投球ログ） -->
-<div class="w-full lg:w-1/2 flex flex-col gap-2.5">
+<div class="w-full lg:w-1/2 flex flex-col gap-2.5 lg:overflow-y-auto pr-0 lg:pr-1">
   <!-- ① スコアボード & 球数・タイマー管理 -->
-  <section id="scoreboard-slot" class="w-full">
+  <section id="scoreboard-slot" class="w-full flex-shrink-0">
     <!-- scoreboard.js が描画 -->
   </section>
 
   <!-- ② 走者ダイアモンド & BSOカウントランプ & 走者イベントボタン & 投球ログ -->
-  <section id="diamond-slot" class="w-full">
+  <section id="diamond-slot" class="w-full flex-1">
     <!-- runnerDiamond.js が一括して描画 -->
   </section>
 </div>
 
 <!-- 【右カラム】投球入力コンソール（17分割盤面 & 判定ボタン） -->
-<div class="w-full lg:w-1/2 flex flex-col">
+<div class="w-full lg:w-1/2 flex flex-col justify-start lg:overflow-y-auto pl-0 lg:pl-1">
   <main class="w-full">
     <section id="zone-slot">
       <!-- zone.js がプロ仕様コンソールを描画 -->
     </section>
   </main>
 </div>
-
-
-      <!-- ④ 直近の投球ログ（ヘッダーと重ならない完全整列版） -->
-      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-2.5 shadow-md flex-1 flex flex-col">
-        <!-- ログヘッダー：左に見出し、右端に総投球数を綺麗に整列 -->
-        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 flex-shrink-0">
-          <div class="flex items-center gap-1.5">
-            <span class="text-xs">📋</span>
-            <span class="text-xs font-bold text-slate-300">直近の投球ログ</span>
-          </div>
-          <div class="flex items-center gap-1 text-[11px] font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-            <span class="text-slate-400">総投球数:</span>
-            <span id="log-total-pitch-count" class="text-emerald-400 font-bold">0球</span>
-          </div>
-        </div>
-
-        <!-- ログテーブル描画スロット -->
-        <div id="log-slot" class="overflow-x-auto max-h-48 overflow-y-auto flex-1">
-          <!-- runnerDiamond.js または app.js が更新 -->
-        </div>
-      </section>
-    </div>
-
-    <!-- 【右カラム】投球入力コンソール（17分割盤面 & 判定ボタン） -->
-    <div class="w-full lg:w-1/2 flex flex-col">
-      <main class="w-full">
-        <section id="zone-slot">
-          <!-- zone.js がプロ仕様コンソールを描画 -->
-        </section>
-      </main>
-    </div>
-
-  </div>
 
   <!-- 3. モーダルスロット -->
   <!-- 打球入力モーダル -->
