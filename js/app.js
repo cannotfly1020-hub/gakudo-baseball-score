@@ -37,7 +37,15 @@ class BaseballApp {
     const zoneSlot = document.getElementById("zone-slot");
     const sprayModalSlot = document.getElementById("spray-modal-slot");
     const rosterSlot = document.getElementById("roster-modal-slot");
-    const scoresheetSlot = document.getElementById("scoresheet-modal-slot");
+    
+    // スコア表受皿スロット（index.html に万が一なくても自動生成して確実に動作させる）
+    let scoresheetSlot = document.getElementById("scoresheet-modal-slot");
+    if (!scoresheetSlot) {
+      scoresheetSlot = document.createElement("div");
+      scoresheetSlot.id = "scoresheet-modal-slot";
+      scoresheetSlot.className = "hidden";
+      document.body.appendChild(scoresheetSlot);
+    }
 
     if (scoreboardSlot) {
       this.scoreboardComponent = new ScoreboardComponent(scoreboardSlot, this.gameState);
@@ -56,7 +64,11 @@ class BaseballApp {
     }
 
     if (scoresheetSlot) {
-      this.scoreSheetComponent = new ScoreSheetComponent(scoresheetSlot, this.gameState);
+      try {
+        this.scoreSheetComponent = new ScoreSheetComponent(scoresheetSlot, this.gameState);
+      } catch (err) {
+        console.error("ScoreSheetComponent 初期化エラー:", err);
+      }
     }
 
     if (zoneSlot) {
@@ -120,11 +132,30 @@ class BaseballApp {
       });
     }
 
+    // スコア表オープン処理（診断用通知付き）
     const scoresheetBtn = document.getElementById("btn-open-scoresheet");
-    if (scoresheetBtn && this.scoreSheetComponent) {
-      scoresheetBtn.addEventListener("click", () => {
-        this.scoreSheetComponent.open();
+    if (scoresheetBtn) {
+      scoresheetBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        try {
+          if (!this.scoreSheetComponent) {
+            let slot = document.getElementById("scoresheet-modal-slot");
+            if (!slot) {
+              slot = document.createElement("div");
+              slot.id = "scoresheet-modal-slot";
+              document.body.appendChild(slot);
+            }
+            this.scoreSheetComponent = new ScoreSheetComponent(slot, this.gameState);
+          }
+          this.scoreSheetComponent.open();
+        } catch (err) {
+          // 万が一エラーが出た場合、画面に直接理由を表示
+          window.alert("スコア表起動エラー:\n" + err.message);
+          console.error(err);
+        }
       });
+    } else {
+      console.warn("btn-open-scoresheet が見つかりません");
     }
 
     const exportBtn = document.getElementById("btn-export-csv");
@@ -223,6 +254,23 @@ class BaseballApp {
       case "凡打":
       case "犠牲フライ":
         this.gameState.handleOut();
+        break;
+
+      case "併殺打":
+        // 1. 塁上の前走者（1塁、いなければ2塁・3塁）をアウトにして消去
+        if (state.runners[1]) {
+          state.runners[1] = false;
+        } else if (state.runners[2]) {
+          state.runners[2] = false;
+        } else if (state.runners[3]) {
+          state.runners[3] = false;
+        }
+        // 2. 打者アウト ＋ 走者アウト（計2アウト加算）
+        this.gameState.handleOut();
+        // 3アウトチェンジになっていなければ、もう1アウト加算
+        if (state.outs > 0) {
+          this.gameState.handleOut();
+        }
         break;
 
       case "単打":
