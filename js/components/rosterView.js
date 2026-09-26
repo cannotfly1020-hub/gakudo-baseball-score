@@ -98,6 +98,7 @@ export class RosterViewComponent {
     const gameInfo = (state && state.gameInfo) ? state.gameInfo : {
       date: new Date().toISOString().slice(0, 10),
       tournament: "公式戦",
+      venue: "",
       myTeamName: "自チーム",
       oppTeamName: "相手チーム",
       myTeamSide: "away"
@@ -105,7 +106,7 @@ export class RosterViewComponent {
 
     return `
       <div class="space-y-3">
-        <!-- 試合基本情報 入力枠（日付・大会名・自チーム名・相手チーム名） -->
+        <!-- 試合基本情報 入力枠（日付・大会名・球場名・自チーム名・相手チーム名） -->
         <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-2">
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1">
@@ -122,6 +123,10 @@ export class RosterViewComponent {
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">大会名 / 試合名</label>
               <input type="text" id="input-game-tournament" value="${gameInfo.tournament || ''}" placeholder="例: 春季公式戦" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-[10px] text-slate-400 mb-0.5">球場 / グラウンド名</label>
+              <input type="text" id="input-game-venue" value="${gameInfo.venue || ''}" placeholder="例: 市民球場 A面" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500">
             </div>
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">自チーム名</label>
@@ -323,6 +328,7 @@ export class RosterViewComponent {
     // 試合基本情報の入力変更をGameStateに自動同期
     const inputDate = this.container.querySelector("#input-game-date");
     const inputTournament = this.container.querySelector("#input-game-tournament");
+    const inputVenue = this.container.querySelector("#input-game-venue");
     const inputMyTeam = this.container.querySelector("#input-team-my");
     const inputOppTeam = this.container.querySelector("#input-team-opp");
 
@@ -331,6 +337,7 @@ export class RosterViewComponent {
         this.gameState.updateGameInfo({
           date: inputDate ? inputDate.value : undefined,
           tournament: inputTournament ? inputTournament.value : undefined,
+          venue: inputVenue ? inputVenue.value : undefined,
           myTeamName: inputMyTeam ? inputMyTeam.value : undefined,
           oppTeamName: inputOppTeam ? inputOppTeam.value : undefined,
           myTeamSide: this.myTeamSide
@@ -338,7 +345,7 @@ export class RosterViewComponent {
       }
     };
 
-    [inputDate, inputTournament, inputMyTeam, inputOppTeam].forEach((el) => {
+    [inputDate, inputTournament, inputVenue, inputMyTeam, inputOppTeam].forEach((el) => {
       if (el) {
         el.addEventListener("change", syncGameInfo);
         el.addEventListener("blur", syncGameInfo);
@@ -619,6 +626,7 @@ export class RosterViewComponent {
     // 反映時に入力枠の内容も最終確認して反映
     const inputDate = this.container.querySelector("#input-game-date");
     const inputTournament = this.container.querySelector("#input-game-tournament");
+    const inputVenue = this.container.querySelector("#input-game-venue");
     const inputMyTeam = this.container.querySelector("#input-team-my");
     const inputOppTeam = this.container.querySelector("#input-team-opp");
 
@@ -626,6 +634,7 @@ export class RosterViewComponent {
       this.gameState.updateGameInfo({
         date: inputDate ? inputDate.value : undefined,
         tournament: inputTournament ? inputTournament.value : undefined,
+        venue: inputVenue ? inputVenue.value : undefined,
         myTeamName: inputMyTeam ? inputMyTeam.value : undefined,
         oppTeamName: inputOppTeam ? inputOppTeam.value : undefined,
         myTeamSide: this.myTeamSide
