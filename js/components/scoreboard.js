@@ -65,6 +65,19 @@ export class ScoreboardComponent {
           </div>
         </div>
 
+        <!-- 1.5 試合基本情報バー（日付・大会名・対戦カード） -->
+        <div id="game-info-badge-bar" class="flex items-center justify-between bg-slate-950/50 px-2.5 py-1 rounded-xl border border-slate-800/60 text-[10px]">
+          <div class="flex items-center gap-1.5 text-slate-300 font-bold truncate">
+            <span>📅</span>
+            <span id="display-game-date" class="font-mono text-emerald-400">-</span>
+            <span class="text-slate-600">|</span>
+            <span id="display-game-tournament" class="text-slate-200 truncate max-w-[140px] sm:max-w-[200px]">公式戦</span>
+          </div>
+          <div class="text-[9px] text-slate-400 font-bold bg-slate-900 border border-slate-800 px-1.5 py-0.2 rounded" id="display-matchup-summary">
+            試合情報
+          </div>
+        </div>
+
         <!-- 2. イニング ＆ 球数メーター -->
         <div class="flex items-center justify-between bg-slate-950/80 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
           <div class="flex items-center gap-2">
@@ -109,7 +122,7 @@ export class ScoreboardComponent {
             <tbody class="divide-y divide-slate-800/80 font-mono">
               <!-- 先攻 -->
               <tr id="row-away" class="h-6 hover:bg-slate-800/30 transition">
-                <td class="text-left pl-2 font-sans font-black text-slate-200 truncate text-[11px]">先攻</td>
+                <td id="team-name-away" class="text-left pl-2 font-sans font-black text-slate-200 truncate text-[11px]" title="先攻">先攻</td>
                 <td id="score-a-1" class="text-slate-300">-</td>
                 <td id="score-a-2" class="text-slate-300">-</td>
                 <td id="score-a-3" class="text-slate-300">-</td>
@@ -123,7 +136,7 @@ export class ScoreboardComponent {
               </tr>
               <!-- 後攻 -->
               <tr id="row-home" class="h-6 hover:bg-slate-800/30 transition">
-                <td class="text-left pl-2 font-sans font-black text-slate-200 truncate text-[11px]">後攻</td>
+                <td id="team-name-home" class="text-left pl-2 font-sans font-black text-slate-200 truncate text-[11px]" title="後攻">後攻</td>
                 <td id="score-h-1" class="text-slate-300">-</td>
                 <td id="score-h-2" class="text-slate-300">-</td>
                 <td id="score-h-3" class="text-slate-300">-</td>
@@ -223,6 +236,42 @@ export class ScoreboardComponent {
   update(state) {
     if (!state) return;
 
+    // 試合基本情報（日付・大会名・チーム名）の反映
+    const info = state.gameInfo || {};
+    const dateEl = this.container.querySelector("#display-game-date");
+    const tourEl = this.container.querySelector("#display-game-tournament");
+    const summaryEl = this.container.querySelector("#display-matchup-summary");
+
+    if (dateEl) dateEl.textContent = info.date || new Date().toISOString().slice(0, 10);
+    if (tourEl) tourEl.textContent = info.tournament || "公式戦";
+
+    // 先攻・後攻チーム名の決定
+    let awayTeamName = "先攻";
+    let homeTeamName = "後攻";
+
+    if (state.teams && state.teams.away && state.teams.away.name) {
+      awayTeamName = state.teams.away.name;
+    }
+    if (state.teams && state.teams.home && state.teams.home.name) {
+      homeTeamName = state.teams.home.name;
+    }
+
+    if (summaryEl) {
+      summaryEl.textContent = `${awayTeamName} vs ${homeTeamName}`;
+    }
+
+    // スコアボード行のチーム名セルを更新
+    const nameAwayEl = this.container.querySelector("#team-name-away");
+    const nameHomeEl = this.container.querySelector("#team-name-home");
+    if (nameAwayEl) {
+      nameAwayEl.textContent = awayTeamName;
+      nameAwayEl.title = awayTeamName;
+    }
+    if (nameHomeEl) {
+      nameHomeEl.textContent = homeTeamName;
+      nameHomeEl.title = homeTeamName;
+    }
+
     // イニング表示 ＆ 攻撃チーム
     const inningEl = this.container.querySelector("#display-inning");
     const attackEl = this.container.querySelector("#display-attack-side");
@@ -231,8 +280,9 @@ export class ScoreboardComponent {
       inningEl.textContent = state.isTieBreak ? `TB${topBottom}` : `${state.inning}回${topBottom}`;
     }
     if (attackEl) {
-      attackEl.textContent = state.isTop ? "先攻 攻撃中" : "後攻 攻撃中";
-      attackEl.className = state.isTop ? "text-[11px] text-sky-400 font-bold" : "text-[11px] text-amber-400 font-bold";
+      const attackingTeamName = state.isTop ? awayTeamName : homeTeamName;
+      attackEl.textContent = `${attackingTeamName} 攻撃中`;
+      attackEl.className = state.isTop ? "text-[11px] text-sky-400 font-bold truncate max-w-[130px]" : "text-[11px] text-amber-400 font-bold truncate max-w-[130px]";
     }
 
     this.updatePitchMeter(state);
