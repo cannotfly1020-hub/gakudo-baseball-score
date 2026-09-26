@@ -28,6 +28,7 @@ export class GameState {
       gameInfo: {
         date: new Date().toISOString().slice(0, 10), // 例: "2026-09-26"
         tournament: "公式戦",
+        venue: "", // 球場・グラウンド名
         myTeamName: "自チーム",
         oppTeamName: "相手チーム",
         myTeamSide: "away" // "away" (先攻) または "home" (後攻)
