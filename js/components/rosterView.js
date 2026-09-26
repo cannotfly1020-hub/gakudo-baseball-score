@@ -494,7 +494,13 @@ export class RosterViewComponent {
 
   openTenkeyModal(orderIdx) {
     this.tenkeyTargetSlot = orderIdx;
-    this.tenkeyValue = "";
+    const currentSlot = this.oppLineup[orderIdx] || {};
+    this.tenkeyValue = currentSlot.number ? String(currentSlot.number) : "";
+    
+    // 既存の名前があれば初期値にセット（「相手 1番」や「1番 打者」などの自動生成名は空欄にして入力しやすくする）
+    const isAutoName = currentSlot.name && (currentSlot.name.includes("番 打者") || currentSlot.name.includes("相手"));
+    const initialName = (currentSlot.name && !isAutoName) ? currentSlot.name : "";
+
     const slotEl = this.container.querySelector("#tenkey-modal-slot");
     if (!slotEl) return;
 
@@ -502,12 +508,21 @@ export class RosterViewComponent {
     slotEl.innerHTML = `
       <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[280px] p-3.5 shadow-2xl space-y-3">
         <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <h3 class="text-xs font-black text-amber-400">${orderIdx + 1}番 相手背番号入力</h3>
+          <h3 class="text-xs font-black text-amber-400">${orderIdx + 1}番 相手選手情報入力</h3>
           <button type="button" id="btn-tenkey-close" class="text-slate-400 hover:text-white text-base">✕</button>
         </div>
 
-        <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center font-mono font-black text-2xl text-white">
-          # <span id="tenkey-display">_</span>
+        <!-- 背番号 ＆ 氏名入力エリア -->
+        <div class="space-y-2">
+          <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 flex items-center justify-between">
+            <span class="text-xs text-slate-400 font-bold">背番号:</span>
+            <span class="font-mono font-black text-2xl text-emerald-400"># <span id="tenkey-display">${this.tenkeyValue || "_"}</span></span>
+          </div>
+
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-0.5">選手氏名 (苗字など)</label>
+            <input type="text" id="input-opp-player-name" value="${initialName}" placeholder="例: 佐藤" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none font-bold">
+          </div>
         </div>
 
         <div class="grid grid-cols-3 gap-1.5" id="tenkey-pad">
@@ -531,6 +546,7 @@ export class RosterViewComponent {
     `;
 
     const displayEl = slotEl.querySelector("#tenkey-display");
+    const nameInputEl = slotEl.querySelector("#input-opp-player-name");
     const closeBtn = slotEl.querySelector("#btn-tenkey-close");
     if (closeBtn) {
       closeBtn.addEventListener("click", () => {
@@ -545,10 +561,18 @@ export class RosterViewComponent {
           this.tenkeyValue = "";
         } else if (key === "OK") {
           const num = parseInt(this.tenkeyValue, 10);
+          const enteredName = nameInputEl ? nameInputEl.value.trim() : "";
+
           if (!isNaN(num)) {
             this.oppLineup[this.tenkeyTargetSlot].number = num;
+          }
+          
+          if (enteredName) {
+            this.oppLineup[this.tenkeyTargetSlot].name = enteredName;
+          } else if (!isNaN(num)) {
             this.oppLineup[this.tenkeyTargetSlot].name = `${num}番 打者`;
           }
+
           slotEl.className = "hidden";
           this.render();
           this.bindEvents();
