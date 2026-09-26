@@ -13,6 +13,7 @@ import { RunnerDiamondComponent } from "./components/runnerDiamond.js";
 import { ZoneComponent } from "./components/zone.js";
 import { SprayModalComponent } from "./components/sprayModal.js";
 import { RosterViewComponent } from "./components/rosterView.js";
+import { ScoreSheetComponent } from "./components/scoreSheet.js";
 import { dbStorage } from "./storage/indexedDb.js";
 import { DataExporter } from "./storage/exporter.js";
 
@@ -24,6 +25,7 @@ class BaseballApp {
     this.zoneComponent = null;
     this.sprayModalComponent = null;
     this.rosterViewComponent = null;
+    this.scoreSheetComponent = null;
     this.saveTimer = null;
   }
 
@@ -35,6 +37,7 @@ class BaseballApp {
     const zoneSlot = document.getElementById("zone-slot");
     const sprayModalSlot = document.getElementById("spray-modal-slot");
     const rosterSlot = document.getElementById("roster-modal-slot");
+    const scoresheetSlot = document.getElementById("scoresheet-modal-slot");
 
     if (scoreboardSlot) {
       this.scoreboardComponent = new ScoreboardComponent(scoreboardSlot, this.gameState);
@@ -50,6 +53,10 @@ class BaseballApp {
 
     if (rosterSlot) {
       this.rosterViewComponent = new RosterViewComponent(rosterSlot, this.gameState);
+    }
+
+    if (scoresheetSlot) {
+      this.scoreSheetComponent = new ScoreSheetComponent(scoresheetSlot, this.gameState);
     }
 
     if (zoneSlot) {
@@ -110,6 +117,13 @@ class BaseballApp {
     if (rosterBtn && rosterSlot) {
       rosterBtn.addEventListener("click", () => {
         rosterSlot.classList.toggle("hidden");
+      });
+    }
+
+    const scoresheetBtn = document.getElementById("btn-open-scoresheet");
+    if (scoresheetBtn && this.scoreSheetComponent) {
+      scoresheetBtn.addEventListener("click", () => {
+        this.scoreSheetComponent.open();
       });
     }
 
