@@ -27,21 +27,25 @@
       <p class="text-[10px] text-slate-500 font-mono hidden sm:block">gakudo-baseball-score</p>
     </div>
 
-    <!-- 下段：4等分均等アクションボタン（PC・スマホともに高さ・幅が完全統一） -->
-    <div class="grid grid-cols-4 gap-2 w-full max-w-full sm:max-w-xl">
-      <button id="btn-open-roster" type="button" class="h-9 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1.5 shadow transition">
+    <!-- 下段：5等分均等アクションボタン（PC・スマホともに高さ・幅が完全統一） -->
+    <div class="grid grid-cols-5 gap-1.5 sm:gap-2 w-full max-w-full sm:max-w-2xl">
+      <button id="btn-open-roster" type="button" class="h-9 px-1 sm:px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1 shadow transition">
         <span>📋</span>
         <span class="truncate">オーダー</span>
       </button>
-      <button id="btn-export-csv" type="button" class="h-9 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-900/50 flex items-center justify-center gap-1.5 shadow transition" title="公式スコアCSVを保存">
+      <button id="btn-open-scoresheet" type="button" class="h-9 px-1 sm:px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-400 text-xs font-bold rounded-lg border border-amber-900/50 flex items-center justify-center gap-1 shadow transition" title="公式記録サマリーシート（印刷・PDF）">
+        <span>📄</span>
+        <span class="truncate">スコア表</span>
+      </button>
+      <button id="btn-export-csv" type="button" class="h-9 px-1 sm:px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-900/50 flex items-center justify-center gap-1 shadow transition" title="公式スコアCSVを保存">
         <span>📤</span>
         <span class="truncate">CSV</span>
       </button>
-      <button id="btn-undo" type="button" class="h-9 px-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 shadow transition">
+      <button id="btn-undo" type="button" class="h-9 px-1 sm:px-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1 shadow transition">
         <span>↺</span>
         <span class="truncate">1球取消</span>
       </button>
-      <button id="btn-reset-game" type="button" class="h-9 px-2 bg-rose-950/80 hover:bg-rose-900 active:scale-95 text-rose-300 text-xs font-bold rounded-lg border border-rose-800/80 flex items-center justify-center gap-1.5 shadow transition" title="試合を最初からやり直す">
+      <button id="btn-reset-game" type="button" class="h-9 px-1 sm:px-2 bg-rose-950/80 hover:bg-rose-900 active:scale-95 text-rose-300 text-xs font-bold rounded-lg border border-rose-800/80 flex items-center justify-center gap-1 shadow transition" title="試合を最初からやり直す">
         <span>🗑</span>
         <span class="truncate">リセット</span>
       </button>
@@ -87,6 +91,9 @@
   <!-- オーダー登録モーダル -->
   <div id="roster-modal-slot" class="hidden fixed inset-0 bg-black/80 z-40 p-3 overflow-y-auto flex items-center justify-center"></div>
 
+  <!-- 公式記録サマリーシート（A4印刷・PDF出力）モーダル -->
+  <div id="scoresheet-modal-slot" class="hidden"></div>
+
   <!-- リセット確認ダイアログ（誤操作を完全に防ぐ2段階モーダル） -->
   <div id="reset-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 select-none">
     <div class="bg-slate-900 border border-rose-900/60 rounded-2xl w-full max-w-sm p-4 shadow-2xl space-y-3">
@@ -107,11 +114,9 @@
         </button>
       </div>
     </div>
-  </div> 
-  <div id="reset-confirm-modal" class="hidden ...">
+  </div>
 
   <!-- 4. ES Modules エントリーポイント -->
   <script type="module" src="js/app.js"></script>
-
 </body>
 </html>
