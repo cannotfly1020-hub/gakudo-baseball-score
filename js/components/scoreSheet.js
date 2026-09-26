@@ -144,6 +144,7 @@ export class ScoreSheetComponent {
         <div class="text-right text-xs space-y-0.5 font-mono">
           <div><span class="text-slate-500 font-bold">試合日:</span> <span class="font-black text-slate-900">${info.date || new Date().toISOString().slice(0, 10)}</span></div>
           <div><span class="text-slate-500 font-bold">大会名:</span> <span class="font-black text-slate-900">${info.tournament || "公式戦"}</span></div>
+          <div><span class="text-slate-500 font-bold">球場:</span> <span class="font-black text-slate-900">${info.venue || "未登録"}</span></div>
           <div><span class="text-slate-500 font-bold">対戦:</span> <span class="text-slate-700 font-bold">${awayTeamName} vs ${homeTeamName}</span></div>
         </div>
       </div>
@@ -296,12 +297,35 @@ export class ScoreSheetComponent {
         </div>
       </div>
 
-      <!-- 5. 署名・備考欄 (印刷用) -->
-      <div class="border-t border-slate-300 pt-2 flex items-center justify-between text-[10px] text-slate-500 font-mono">
-        <div>出力システム: gakudo-baseball-score / 学童野球 1球速報</div>
-        <div class="flex items-center gap-4">
-          <span>球審: __________________</span>
-          <span>記録員: __________________</span>
+      <!-- 5. 署名・認印押印枠 (公式記録用紙仕様) -->
+      <div class="border-t border-slate-400 pt-2 flex items-end justify-between text-[10px] text-slate-600 font-sans">
+        <div class="space-y-0.5 text-slate-400 font-mono">
+          <div>gakudo-baseball-score / 学童野球 1球速報</div>
+          <div>※本用紙は学童軟式野球連盟 投球制限・試合記録の照合用公認帳票です</div>
+        </div>
+
+        <!-- 審判員・公式記録員 署名捺印欄 -->
+        <div class="flex items-center gap-2 border border-slate-400 p-1.5 rounded bg-slate-50/50">
+          <!-- 球審 -->
+          <div class="flex items-center gap-1 border-r border-slate-300 pr-2">
+            <span class="font-bold text-slate-700">球審:</span>
+            <span class="inline-block w-16 border-b border-slate-400 text-center text-xs"></span>
+            <span class="inline-flex items-center justify-center w-6 h-6 border border-dashed border-slate-400 rounded text-[9px] text-slate-400 select-none">印</span>
+          </div>
+
+          <!-- 塁審 -->
+          <div class="flex items-center gap-1 border-r border-slate-300 pr-2">
+            <span class="font-bold text-slate-700">塁審:</span>
+            <span class="inline-block w-20 border-b border-slate-400 text-center text-xs"></span>
+            <span class="inline-flex items-center justify-center w-6 h-6 border border-dashed border-slate-400 rounded text-[9px] text-slate-400 select-none">印</span>
+          </div>
+
+          <!-- 公式記録員 -->
+          <div class="flex items-center gap-1">
+            <span class="font-bold text-slate-700">公式記録員:</span>
+            <span class="inline-block w-20 border-b border-slate-400 text-center text-xs"></span>
+            <span class="inline-flex items-center justify-center w-6 h-6 border border-dashed border-slate-400 rounded text-[9px] text-slate-400 select-none">印</span>
+          </div>
         </div>
       </div>
     `;
