@@ -14,6 +14,7 @@ const RESULT_COLORS = {
   "三塁打": "#f43f5e",
   "本塁打": "#e11d48",
   "凡打": "#94a3b8",
+  "併殺打": "#f97316",
   "送りバント": "#10b981",
   "スクイズ": "#10b981",
   "犠牲フライ": "#10b981",
@@ -104,6 +105,7 @@ export class SprayModalComponent {
                   <button type="button" class="btn-spray-opt" data-val="失策">失策</button>
                   <button type="button" class="btn-spray-opt" data-val="野選">野選</button>
                   <button type="button" class="btn-spray-opt" data-val="振り逃げ">振逃</button>
+                  <button type="button" class="btn-spray-opt" data-val="併殺打">併殺打</button>
                 </div>
               </div>
 
