@@ -31,7 +31,6 @@ export class SprayModalComponent {
     this.currentCourse = "中央";
     this.selectedResult = "凡打";
     this.selectedQuality = "ゴロ";
-    this.selectedRuns = 0;
     this.hitCoord = { x: 0.5, y: 0.62 };
     this.onCompleteCallback = null;
 
@@ -109,32 +108,17 @@ export class SprayModalComponent {
                 </div>
               </div>
 
-              <!-- ② 球質 & ③ 得点 -->
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-[11px] font-bold text-slate-300">② 球質:</span>
-                    <span id="label-selected-quality" class="text-[10px] text-emerald-400 font-bold">ゴロ</span>
-                  </div>
-                  <div class="grid grid-cols-2 gap-1" id="group-quality">
-                    <button type="button" class="btn-spray-quality" data-val="ゴロ">ゴロ</button>
-                    <button type="button" class="btn-spray-quality" data-val="フライ">フライ</button>
-                    <button type="button" class="btn-spray-quality" data-val="ライナー">ライナー</button>
-                    <button type="button" class="btn-spray-quality" data-val="バント">バント</button>
-                  </div>
+              <!-- ② 球質 (横4列でスッキリ配置) -->
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-[11px] font-bold text-slate-300">② 球質:</span>
+                  <span id="label-selected-quality" class="text-[10px] text-emerald-400 font-bold">ゴロ</span>
                 </div>
-
-                <div>
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-[11px] font-bold text-slate-300">③ 発生得点:</span>
-                    <span id="label-selected-runs" class="text-[10px] text-amber-400 font-bold">0点</span>
-                  </div>
-                  <div class="grid grid-cols-4 gap-1" id="group-runs">
-                    <button type="button" class="btn-spray-runs" data-val="0">0</button>
-                    <button type="button" class="btn-spray-runs" data-val="1">1</button>
-                    <button type="button" class="btn-spray-runs" data-val="2">2</button>
-                    <button type="button" class="btn-spray-runs" data-val="3">3+</button>
-                  </div>
+                <div class="grid grid-cols-4 gap-1" id="group-quality">
+                  <button type="button" class="btn-spray-quality" data-val="ゴロ">ゴロ</button>
+                  <button type="button" class="btn-spray-quality" data-val="フライ">フライ</button>
+                  <button type="button" class="btn-spray-quality" data-val="ライナー">ライナー</button>
+                  <button type="button" class="btn-spray-quality" data-val="バント">バント</button>
                 </div>
               </div>
 
@@ -216,17 +200,6 @@ export class SprayModalComponent {
       });
     }
 
-    const runsGroup = this.container.querySelector("#group-runs");
-    if (runsGroup) {
-      runsGroup.addEventListener("click", (e) => {
-        const btn = e.target.closest("[data-val]");
-        if (btn) {
-          this.selectedRuns = parseInt(btn.getAttribute("data-val"), 10);
-          this.applyButtonStyles();
-        }
-      });
-    }
-
     const submitBtn = this.container.querySelector("#btn-modal-submit");
     if (submitBtn) {
       submitBtn.addEventListener("click", () => this.submit());
@@ -252,23 +225,11 @@ export class SprayModalComponent {
         : "btn-spray-quality bg-slate-800 text-slate-300 font-medium py-1.5 rounded text-xs border border-slate-700";
     }
 
-    const rBtns = this.container.querySelectorAll(".btn-spray-runs");
-    for (let i = 0; i < rBtns.length; i++) {
-      const b = rBtns[i];
-      const isActive = parseInt(b.getAttribute("data-val"), 10) === this.selectedRuns;
-      b.className = isActive
-        ? "btn-spray-runs bg-amber-500 text-white font-black py-1.5 rounded text-xs ring-2 ring-white shadow"
-        : "btn-spray-runs bg-slate-800 text-slate-300 font-medium py-1.5 rounded text-xs border border-slate-700";
-    }
-
     const lr = this.container.querySelector("#label-selected-result");
     if (lr) lr.textContent = `選択中: ${this.selectedResult}`;
 
     const lq = this.container.querySelector("#label-selected-quality");
     if (lq) lq.textContent = this.selectedQuality;
-
-    const lruns = this.container.querySelector("#label-selected-runs");
-    if (lruns) lruns.textContent = `${this.selectedRuns}点`;
   }
 
   drawField() {
@@ -406,7 +367,6 @@ export class SprayModalComponent {
     this.hitCoord = { x: 0.5, y: 0.62 };
     this.selectedResult = "凡打";
     this.selectedQuality = "ゴロ";
-    this.selectedRuns = 0;
 
     const courseLabel = this.container.querySelector("#modal-current-course");
     if (courseLabel) courseLabel.textContent = course;
@@ -431,7 +391,6 @@ export class SprayModalComponent {
       course: this.currentCourse,
       type: this.selectedResult,
       quality: this.selectedQuality,
-      runs: this.selectedRuns,
       area: area,
       hitCoord: this.hitCoord
     };
