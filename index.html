@@ -5,6 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>学童野球 1球速報 - gakudo-baseball-score</title>
   
+  <!-- PWA マニフェスト ＆ テーマカラー設定 -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b1329">
+  <meta name="background-color" content="#0b1329">
+
+  <!-- iOS Safari 向け専用ホーム画面（PWA）設定 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="学童野球速報">
+  <link rel="apple-touch-icon" href="icon.svg">
+
+  <!-- ファビコン（タブ表示用） -->
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+
   <!-- ユーティリティCSS (Tailwind CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
   
@@ -22,7 +36,7 @@
       <div class="flex items-center gap-2">
         <span class="text-xl sm:text-2xl">⚾️</span>
         <h1 class="text-base sm:text-lg font-black text-emerald-400">学童野球 1球速報</h1>
-        <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700 font-mono">v1.0</span>
+        <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700 font-mono">v1.0 (PWA)</span>
       </div>
       <p class="text-[10px] text-slate-500 font-mono hidden sm:block">gakudo-baseball-score</p>
     </div>
@@ -118,5 +132,21 @@
 
   <!-- 4. ES Modules エントリーポイント -->
   <script type="module" src="js/app.js"></script>
+
+  <!-- 5. PWA Service Worker 登録スクリプト（電波なしオフライン稼働） -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("./sw.js")
+          .then((reg) => {
+            console.log("PWA サービスワーカー登録完了:", reg.scope);
+          })
+          .catch((err) => {
+            console.warn("PWA サービスワーカー登録失敗:", err);
+          });
+      });
+    }
+  </script>
 </body>
 </html>
