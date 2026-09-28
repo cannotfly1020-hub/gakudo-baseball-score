@@ -1,0 +1,18 @@
+{
+"name": "学童野球 1球速報",
+"short_name": "学童野球速報",
+"description": "電波のないグラウンドでも動作する学童軟式野球専用スコア・1球速報PWAアプリ",
+"start_url": "./index.html",
+"display": "standalone",
+"orientation": "any",
+"background_color": "#0b1329",
+"theme_color": "#0b1329",
+"icons": [
+{
+"src": "./icon.svg",
+"sizes": "192x192 512x512",
+"type": "image/svg+xml",
+"purpose": "any maskable"
+}
+]
+}
