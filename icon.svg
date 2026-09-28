@@ -1,1 +1,46 @@
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<defs>
+<!-- 背景グラデーション（アプリのダークネイビー調） -->
+<linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#0f172a" />
+<stop offset="100%" stop-color="#020617" />
+</linearGradient>
+<!-- ボールの立体グラデーション -->
+<radialGradient id="ballGrad" cx="35%" cy="35%" r="65%">
+<stop offset="0%" stop-color="#ffffff" />
+<stop offset="70%" stop-color="#e2e8f0" />
+<stop offset="100%" stop-color="#94a3b8" />
+</radialGradient>
+<!-- 影エフェクト -->
+<filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+<feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.6"/>
+</filter>
+</defs>
+​<!-- アイコン角丸背景 -->
+<rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+<rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="#334155" stroke-width="4" />
+​<!-- ボール本体 -->
+<circle cx="256" cy="240" r="140" fill="url(#ballGrad)" filter="url(#shadow)" />
+​<!-- 縫い目カーブ（左側） -->
+<path d="M 180 120 C 230 180, 230 300, 180 360" fill="none" stroke="#ef4444" stroke-width="6" stroke-linecap="round"/>
+<!-- 縫い目の赤いステッチ（左） -->
+<line x1="184" y1="140" x2="204" y2="148" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="195" y1="180" x2="215" y2="184" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="200" y1="220" x2="220" y2="220" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="198" y1="260" x2="218" y2="258" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="192" y1="300" x2="212" y2="295" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="182" y1="340" x2="200" y2="332" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+​<!-- 縫い目カーブ（右側） -->
+<path d="M 332 120 C 282 180, 282 300, 332 360" fill="none" stroke="#ef4444" stroke-width="6" stroke-linecap="round"/>
+<!-- 縫い目の赤いステッチ（右） -->
+<line x1="328" y1="140" x2="308" y2="148" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="317" y1="180" x2="297" y2="184" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="312" y1="220" x2="292" y2="220" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="314" y1="260" x2="294" y2="258" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="320" y1="300" x2="300" y2="295" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+<line x1="330" y1="340" x2="312" y2="332" stroke="#ef4444" stroke-width="4" stroke-linecap="round" />
+​<!-- 下部テキストラベル -->
+<text x="256" y="440" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="44" fill="#38bdf8" text-anchor="middle" letter-spacing="4">
+1球速報
+</text>
+</svg>
