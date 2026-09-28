@@ -1,11 +1,12 @@
 /**
  * js/components/runnerDiamond.js
- * 走者ダイアモンド ＆ BSOランプコンポーネント（本塁タップ大型判定 ＆ 得点クイック補正対応）
+ * 走者ダイアモンド ＆ BSOランプコンポーネント（本塁向き修正 ＆ 指先大型判定対応）
  * 
  * 担当役割:
  * - BSOランプ（ボール:緑3 / ストライク:黄2 / アウト:赤2）の点灯管理
  * - 走者ダイアモンド（SVG）の描画および各塁（1〜3塁）のワンタップ在塁トグル
- * - 本塁（ホームベース）の指先対応大型タップ判定 ＆ 得点クイック補正ポップオーバー（＋1点 / −1点）
+ * - 本塁（ホームベース）の正規形状（頂点が下向き）＆ 指先大型タップ判定
+ * - 得点クイック補正ポップオーバー（＋1点 / −1点）
  * - 現在の打者・投手情報の表示
  * - 走者の有無に応じた走塁ボタン（盗塁、盗塁刺、暴投、牽制死）の自動活性・非活性制御
  * - 直近投球ログスロット（#log-slot）の自動更新
@@ -89,11 +90,11 @@ export class RunnerDiamondComponent {
 
             <!-- 本塁 (ホーム) グループ: 指先タップ用の大型不可視ヒットエリア付き -->
             <g id="base-home-group" class="cursor-pointer">
-              <!-- 不可視の大型タッチ判定用サークル（スマホの指でも確実に反応） -->
+              <!-- 不可視の大型タッチ判定用サークル（スマホ・タブレットの指でも確実に反応） -->
               <circle cx="50" cy="86" r="16" fill="transparent" class="cursor-pointer" />
-              <!-- 表示用ホームベース（五角形） -->
+              <!-- 表示用ホームベース（正規形状: 平らな辺が上、尖った頂点が下向き） -->
               <polygon id="base-home" class="transition duration-150" 
-                       points="50,80 57,85 57,93 43,93 43,85" 
+                       points="43,80 57,80 57,87 50,93 43,87" 
                        fill="#94a3b8" 
                        stroke="#e2e8f0" 
                        stroke-width="1.8" />
@@ -101,7 +102,7 @@ export class RunnerDiamondComponent {
           </svg>
           
           <!-- ガイド文字（pointer-events-noneでクリック妨害を完全遮断） -->
-          <span class="absolute bottom-0 text-[9px] text-slate-400 font-bold tracking-wider pointer-events-none select-none">
+          <span class="absolute -bottom-1 text-[9px] text-slate-400 font-bold tracking-wider pointer-events-none select-none text-center w-full">
             塁・本塁タップで補正
           </span>
         </div>
