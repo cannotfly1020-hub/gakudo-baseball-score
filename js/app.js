@@ -257,9 +257,14 @@ class BaseballApp {
         break;
 
       case "併殺打":
-        // 1. 塁上の前走者（1塁、いなければ2塁・3塁）をアウトにして消去
+        // 1. 併殺における走者の整理
+        // 1塁走者がいた場合: 1塁走者をアウト(消去)とし、2塁走者がいれば3塁へ進塁
         if (state.runners[1]) {
           state.runners[1] = false;
+          if (state.runners[2] && !state.runners[3]) {
+            state.runners[3] = true;
+            state.runners[2] = false;
+          }
         } else if (state.runners[2]) {
           state.runners[2] = false;
         } else if (state.runners[3]) {
@@ -275,9 +280,34 @@ class BaseballApp {
 
       case "単打":
       case "失策":
-      case "野選":
       case "振り逃げ":
-        this.gameState.advanceWalk();
+        // 3塁走者がいれば本塁生還（モーダル得点が0の場合のみ自動1点加算）
+        if (state.runners[3]) {
+          state.runners[3] = false;
+          if (runsFromPlay === 0) {
+            this.gameState.addRun(1);
+          }
+        }
+        // 各走者が1つ進塁、打者は1塁へ出塁
+        state.runners[3] = state.runners[2] || false;
+        state.runners[2] = state.runners[1] || false;
+        state.runners[1] = true;
+        break;
+
+      case "野選":
+        // 野選（前走者が封殺され、打者走者は1塁セーフ）
+        this.gameState.handleOut();
+        // 3アウトチェンジになっていなければ走者を整理
+        if (state.outs > 0) {
+          if (state.runners[3]) {
+            state.runners[3] = false;
+          } else if (state.runners[2]) {
+            state.runners[2] = false;
+          } else if (state.runners[1]) {
+            state.runners[1] = false;
+          }
+          state.runners[1] = true;
+        }
         break;
 
       case "二塁打":
@@ -327,6 +357,7 @@ class BaseballApp {
         break;
     }
 
+    // モーダル側で指定された発生得点（例: 2点以上など）があればスコアに反映
     if (runsFromPlay > 0 && type !== "本塁打") {
       this.gameState.addRun(runsFromPlay);
     }
