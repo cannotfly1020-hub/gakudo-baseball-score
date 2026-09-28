@@ -1,10 +1,11 @@
 /**
  * js/components/runnerDiamond.js
- * 走者ダイアモンド ＆ BSOランプコンポーネント（走塁ボタン自動無効化対応）
+ * 走者ダイアモンド ＆ BSOランプコンポーネント（走塁ボタン自動無効化 ＆ 本塁タップ得点補正対応）
  * 
  * 担当役割:
  * - BSOランプ（ボール:緑3 / ストライク:黄2 / アウト:赤2）の点灯管理
  * - 走者ダイアモンド（SVG）の描画および各塁（1〜3塁）のワンタップ在塁トグル
+ * - 本塁（ホームベース）タップによる得点クイック補正ポップオーバー（＋1点 / −1点）
  * - 現在の打者・投手情報の表示
  * - 走者の有無に応じた走塁ボタン（盗塁、盗塁刺、暴投、牽制死）の自動活性・非活性制御
  * - 直近投球ログスロット（#log-slot）の自動更新
@@ -40,7 +41,7 @@ export class RunnerDiamondComponent {
 
   render() {
     this.container.innerHTML = `
-      <div class="diamond-panel select-none">
+      <div class="diamond-panel select-none relative">
         
         <!-- 左側: BSOカウントランプ群 -->
         <div class="bso-group">
@@ -68,7 +69,7 @@ export class RunnerDiamondComponent {
         </div>
 
         <!-- 中央: 走者ダイアモンド (SVG) -->
-        <div class="diamond-svg-wrap">
+        <div class="diamond-svg-wrap relative">
           <svg viewBox="0 0 100 100" class="w-full h-full">
             <!-- 塁間ライン -->
             <polygon points="50,15 85,50 50,85 15,50" 
@@ -77,8 +78,8 @@ export class RunnerDiamondComponent {
                      stroke-width="2" 
                      stroke-dasharray="2 2" />
             
-            <!-- 本塁 (ホーム) -->
-            <polygon points="50,83 55,87 55,92 45,92 45,87" 
+            <!-- 本塁 (ホーム) : タップ可能・ホバー演出付き -->
+            <polygon id="base-home" class="cursor-pointer hover:fill-emerald-400 active:scale-95 transition" points="50,83 55,87 55,92 45,92 45,87" 
                      fill="#94a3b8" 
                      stroke="#cbd5e1" 
                      stroke-width="1.5" />
@@ -92,7 +93,28 @@ export class RunnerDiamondComponent {
             <!-- 1塁 (First) -->
             <polygon id="base-1" class="base-indicator" points="85,44 91,50 85,56 79,50" data-base="1" />
           </svg>
-          <span class="absolute bottom-0 text-[9px] text-slate-400 font-bold tracking-wider">塁タップで補正</span>
+          <span class="absolute bottom-0 text-[9px] text-slate-400 font-bold tracking-wider">塁・本塁タップで補正</span>
+
+          <!-- 本塁タップ時の得点クイック補正ミニポップオーバー -->
+          <div id="home-score-popover" class="hidden absolute top-2 inset-x-1 bg-slate-900/95 border border-slate-700 rounded-xl p-2 shadow-2xl z-30 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-100">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-1">
+              <span class="text-[10px] font-bold text-slate-300 flex items-center gap-1">
+                <span>🏠</span>
+                <span>本塁得点の手動補正</span>
+              </span>
+              <button type="button" id="btn-close-home-popover" class="text-slate-400 hover:text-white text-xs px-1">✕</button>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5 text-xs font-black">
+              <button type="button" id="btn-home-add-run" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-1.5 rounded-lg shadow flex items-center justify-center gap-0.5 transition">
+                <span>＋1点</span>
+                <span class="text-[9px] font-normal opacity-80">(生還)</span>
+              </button>
+              <button type="button" id="btn-home-sub-run" class="bg-rose-900/80 hover:bg-rose-800 active:scale-95 text-rose-200 py-1.5 rounded-lg border border-rose-700 shadow flex items-center justify-center gap-0.5 transition">
+                <span>−1点</span>
+                <span class="text-[9px] font-normal opacity-80">(取消)</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- 右側: 対戦情報（投手 / 打者） -->
@@ -136,6 +158,62 @@ export class RunnerDiamondComponent {
         const baseNum = parseInt(baseEl.getAttribute("data-base"), 10);
         this.gameState.toggleRunner(baseNum);
       });
+    });
+
+    // 本塁（ホームベース）タップで得点補正ポップオーバーを開閉
+    const homeBase = this.container.querySelector("#base-home");
+    const popover = this.container.querySelector("#home-score-popover");
+    const closePopoverBtn = this.container.querySelector("#btn-close-home-popover");
+
+    if (homeBase && popover) {
+      homeBase.addEventListener("click", (e) => {
+        e.stopPropagation();
+        popover.classList.toggle("hidden");
+      });
+    }
+
+    if (closePopoverBtn && popover) {
+      closePopoverBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        popover.classList.add("hidden");
+      });
+    }
+
+    // ＋1点ボタン（手動生還）
+    const btnAddRun = this.container.querySelector("#btn-home-add-run");
+    if (btnAddRun && popover) {
+      btnAddRun.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.gameState.addRun(1);
+        popover.classList.add("hidden");
+      });
+    }
+
+    // −1点ボタン（誤加算などの取消）
+    const btnSubRun = this.container.querySelector("#btn-home-sub-run");
+    if (btnSubRun && popover) {
+      btnSubRun.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const state = this.gameState.getState();
+        const idx = state.inning - 1;
+        const currentScore = state.isTop
+          ? (state.awayScore[idx] || 0)
+          : (state.homeScore[idx] || 0);
+
+        if (currentScore > 0) {
+          this.gameState.setScore(state.isTop, idx, currentScore - 1);
+        }
+        popover.classList.add("hidden");
+      });
+    }
+
+    // ポップオーバー外をタップしたら閉じる
+    document.addEventListener("click", (e) => {
+      if (popover && !popover.classList.contains("hidden")) {
+        if (!popover.contains(e.target) && e.target !== homeBase) {
+          popover.classList.add("hidden");
+        }
+      }
     });
 
     // 走塁イベントボタン群の紐付け
