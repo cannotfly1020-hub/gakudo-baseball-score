@@ -6,6 +6,7 @@
  * - table-fixed による各列幅の完全均等・固定化（文字の揺らぎによるズレをゼロに）
  * - チーム名、イニング(1〜6)、TB、R/H/E の境界線とパディングの最適化
  * - 1回裏の得点が正確に「1」のマスに反映されるよう整合
+ * - 現在の攻撃チームに対する得点クイック補正（＋ / −）ボタンの追加
  */
 
 export class ScoreboardComponent {
@@ -86,6 +87,17 @@ export class ScoreboardComponent {
             </span>
             <span class="text-slate-600">|</span>
             <span id="display-attack-side" class="text-[11px] text-slate-300 font-bold">先攻 攻撃中</span>
+
+            <!-- 得点クイック補正（＋ / −）ボタン群 -->
+            <div class="flex items-center gap-1 bg-slate-900 border border-slate-700/80 rounded-lg px-1.5 py-0.5 ml-1">
+              <span class="text-[10px] text-slate-400 font-bold hidden sm:inline">得点:</span>
+              <button type="button" id="btn-score-sub" class="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-rose-950/70 hover:text-rose-300 active:scale-95 text-slate-300 font-black rounded border border-slate-700 text-xs transition" title="現在の攻撃チームの得点を1点取消">
+                −
+              </button>
+              <button type="button" id="btn-score-add" class="w-5 h-5 flex items-center justify-center bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white font-black rounded text-xs transition shadow" title="現在の攻撃チームに1点追加">
+                ＋
+              </button>
+            </div>
           </div>
 
           <div class="flex items-center gap-1.5">
@@ -197,6 +209,29 @@ export class ScoreboardComponent {
           state.runners[2] = true;
         }
         this.gameState.notify();
+      });
+    }
+
+    // スコアボード側 得点クイック補正（＋ / −）イベント
+    const btnScoreAdd = this.container.querySelector("#btn-score-add");
+    if (btnScoreAdd) {
+      btnScoreAdd.addEventListener("click", () => {
+        this.gameState.addRun(1);
+      });
+    }
+
+    const btnScoreSub = this.container.querySelector("#btn-score-sub");
+    if (btnScoreSub) {
+      btnScoreSub.addEventListener("click", () => {
+        const state = this.gameState.getState();
+        const idx = state.inning - 1;
+        const currentScore = state.isTop
+          ? (state.awayScore[idx] || 0)
+          : (state.homeScore[idx] || 0);
+
+        if (currentScore > 0) {
+          this.gameState.setScore(state.isTop, idx, currentScore - 1);
+        }
       });
     }
   }
