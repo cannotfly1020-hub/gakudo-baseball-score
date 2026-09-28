@@ -2,10 +2,12 @@
  * js/components/sprayModal.js
  * 打球入力モーダル ＆ Canvasスプレーチャート
  * 
- * 改善点:
- * - 打球着弾判定（detectArea）に「投手前 (ピッチャー)」を追加
- * - 「捕手前 (キャッチャー)」の判定領域を最適化し、選びやすく調整
- * - Canvas上のピッチャーマウンドを描画し、タップ位置の視認性を向上
+ * 機能:
+ * - 過去の打球着弾点を先攻（青）・後攻（橙）で明確に自動色分け
+ * - モーダル展開時、現在攻撃中チームの打球のみを初期自動表示（自動追従）
+ * - グラウンド上部に「今攻 / 先攻 / 後攻 / 全」のクイック切替トグルを配置
+ * - 打球着弾エリアの自動判定（投手前・捕手前・内野各ポジション・外野）
+ * - 「① 結果」「② 球質」の直感操作パレット（発生得点ボタンは撤廃済）
  */
 
 const RESULT_COLORS = {
@@ -33,6 +35,9 @@ export class SprayModalComponent {
     this.selectedQuality = "ゴロ";
     this.hitCoord = { x: 0.5, y: 0.62 };
     this.onCompleteCallback = null;
+
+    // フィルタ状態: "current"（現在攻撃チームのみ・デフォルト） | "away"（先攻のみ） | "home"（後攻のみ） | "all"（全チーム）
+    this.filterSide = "current";
 
     this.canvas = null;
     this.ctx = null;
@@ -68,13 +73,33 @@ export class SprayModalComponent {
           <!-- メイン -->
           <div class="flex flex-col md:flex-row gap-2.5 items-center md:items-stretch">
             
-            <!-- グラウンドCanvas -->
+            <!-- グラウンドCanvas ＆ チーム着弾点切替 -->
             <div class="w-full md:w-[260px] flex-shrink-0 flex flex-col items-center justify-between gap-1 bg-slate-950 p-2 rounded-xl border border-slate-800">
+              
+              <!-- チーム着弾点表示切替トグルバー -->
+              <div class="w-full flex items-center justify-between gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-800 text-[10px]">
+                <button type="button" class="btn-filter-side flex-1 py-1 rounded font-bold transition text-center" data-filter="current">
+                  今攻
+                </button>
+                <button type="button" class="btn-filter-side flex-1 py-1 rounded font-bold transition text-center" data-filter="away">
+                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-sky-400 mr-0.5"></span>先攻
+                </button>
+                <button type="button" class="btn-filter-side flex-1 py-1 rounded font-bold transition text-center" data-filter="home">
+                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-0.5"></span>後攻
+                </button>
+                <button type="button" class="btn-filter-side flex-1 py-1 rounded font-bold transition text-center" data-filter="all">
+                  全
+                </button>
+              </div>
+
+              <!-- グラウンドCanvas -->
               <div class="relative w-[230px] aspect-square bg-[#0c281e] rounded-lg border border-emerald-800 overflow-hidden flex items-center justify-center">
                 <canvas id="spray-canvas" class="cursor-crosshair touch-none" width="230" height="230"></canvas>
               </div>
+
+              <!-- 判定位置ラベル -->
               <div class="flex items-center justify-between w-full text-[10px] text-slate-400 px-1">
-                <span>※ グラウンドをタップ</span>
+                <span>※ 着弾点をタップ</span>
                 <span id="label-detected-area" class="text-emerald-300 font-bold bg-emerald-950 border border-emerald-800 px-1.5 py-0.5 rounded">
                   二塁手 (セカンド)
                 </span>
@@ -152,6 +177,15 @@ export class SprayModalComponent {
     if (closeBtn) closeBtn.addEventListener("click", () => this.close());
     if (cancelBtn) cancelBtn.addEventListener("click", () => this.close());
 
+    // 表示チーム切替トグル
+    this.container.querySelectorAll(".btn-filter-side").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this.filterSide = btn.getAttribute("data-filter") || "current";
+        this.updateFilterButtons();
+        this.drawField();
+      });
+    });
+
     // スマホ・PC共通のポインターイベント
     if (this.canvas) {
       const handlePointer = (e) => {
@@ -206,6 +240,18 @@ export class SprayModalComponent {
     }
   }
 
+  updateFilterButtons() {
+    const filterBtns = this.container.querySelectorAll(".btn-filter-side");
+    filterBtns.forEach((btn) => {
+      const isSel = btn.getAttribute("data-filter") === this.filterSide;
+      if (isSel) {
+        btn.className = "btn-filter-side flex-1 py-1 rounded font-black transition text-center bg-slate-700 text-white shadow";
+      } else {
+        btn.className = "btn-filter-side flex-1 py-1 rounded font-bold transition text-center text-slate-400 hover:text-slate-200";
+      }
+    });
+  }
+
   applyButtonStyles() {
     const resBtns = this.container.querySelectorAll(".btn-spray-opt");
     for (let i = 0; i < resBtns.length; i++) {
@@ -230,6 +276,8 @@ export class SprayModalComponent {
 
     const lq = this.container.querySelector("#label-selected-quality");
     if (lq) lq.textContent = this.selectedQuality;
+
+    this.updateFilterButtons();
   }
 
   drawField() {
@@ -297,24 +345,41 @@ export class SprayModalComponent {
     ctx.fillRect(thirdX - 3, thirdY - 3, 6, 6);
     ctx.fillRect(homeX - 3, homeY - 3, 6, 6);
 
-    // 過去の打球（直近15件のみ高速描画）
+    // 過去の打球描画（先攻:スカイブルー / 後攻:アンバーオレンジ）
     const state = this.gameState.getState();
+    const isCurrentTop = state.isTop !== false;
+
     if (state.history && state.history.length > 0) {
-      const recentHits = state.history.slice(-15);
-      for (let i = 0; i < recentHits.length; i++) {
-        const p = recentHits[i].pitchEvent;
-        if (p && p.play && p.play.hitCoord) {
-          const hx = p.play.hitCoord.x * w;
-          const hy = p.play.hitCoord.y * h;
-          ctx.beginPath();
-          ctx.arc(hx, hy, 2, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
-          ctx.fill();
-        }
-      }
+      state.history.forEach((item) => {
+        const p = item.pitchEvent;
+        const snap = item.snapshot;
+        if (!p || !p.play || !p.play.hitCoord) return;
+
+        // 打撃を行った側の判定（snap.isTop が true なら先攻、false なら後攻）
+        const isTopHit = snap ? snap.isTop !== false : true;
+
+        // フィルタリング判定（今攻 / 先攻 / 後攻 / 全）
+        if (this.filterSide === "current" && isTopHit !== isCurrentTop) return;
+        if (this.filterSide === "away" && !isTopHit) return;
+        if (this.filterSide === "home" && isTopHit) return;
+
+        const hx = p.play.hitCoord.x * w;
+        const hy = p.play.hitCoord.y * h;
+
+        // 色分け（先攻: スカイブルー #38bdf8 / 後攻: アンバー #f59e0b）
+        const dotColor = isTopHit ? "#38bdf8" : "#f59e0b";
+
+        ctx.beginPath();
+        ctx.arc(hx, hy, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = dotColor;
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      });
     }
 
-    // 現在の着弾点
+    // 現在の着弾点（ハイライト線と大きなマーカー）
     if (this.hitCoord) {
       const targetX = this.hitCoord.x * w;
       const targetY = this.hitCoord.y * h;
@@ -328,32 +393,28 @@ export class SprayModalComponent {
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.arc(targetX, targetY, 5, 0, Math.PI * 2);
+      ctx.arc(targetX, targetY, 5.5, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.8;
       ctx.stroke();
     }
   }
 
   detectArea(x, y) {
-    // 捕手前 (本塁周辺)
     if (y > 0.81) return "捕手前 (キャッチャー)";
 
-    // 投手前 (マウンド周辺: 中央付近)
     if (y >= 0.64 && y <= 0.81 && x >= 0.40 && x <= 0.60) {
       return "投手前 (ピッチャー)";
     }
 
-    // 外野エリア
     if (y < 0.52) {
       if (x < 0.36) return "左翼手 (レフト)";
       if (x > 0.64) return "右翼手 (ライト)";
       return "中堅手 (センター)";
     } 
     
-    // 内野エリア
     if (x < 0.38) return "三塁手 (サード)";
     if (x < 0.50) return "遊撃手 (ショート)";
     if (x < 0.62) return "二塁手 (セカンド)";
@@ -367,6 +428,9 @@ export class SprayModalComponent {
     this.hitCoord = { x: 0.5, y: 0.62 };
     this.selectedResult = "凡打";
     this.selectedQuality = "ゴロ";
+
+    // モーダルを開いたときは、自動で「現在攻撃チーム（今攻）」を初期選択
+    this.filterSide = "current";
 
     const courseLabel = this.container.querySelector("#modal-current-course");
     if (courseLabel) courseLabel.textContent = course;
