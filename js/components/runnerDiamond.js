@@ -1,11 +1,11 @@
 /**
  * js/components/runnerDiamond.js
- * 走者ダイアモンド ＆ BSOランプコンポーネント（走塁ボタン自動無効化 ＆ 本塁タップ得点補正対応）
+ * 走者ダイアモンド ＆ BSOランプコンポーネント（本塁タップ大型判定 ＆ 得点クイック補正対応）
  * 
  * 担当役割:
  * - BSOランプ（ボール:緑3 / ストライク:黄2 / アウト:赤2）の点灯管理
  * - 走者ダイアモンド（SVG）の描画および各塁（1〜3塁）のワンタップ在塁トグル
- * - 本塁（ホームベース）タップによる得点クイック補正ポップオーバー（＋1点 / −1点）
+ * - 本塁（ホームベース）の指先対応大型タップ判定 ＆ 得点クイック補正ポップオーバー（＋1点 / −1点）
  * - 現在の打者・投手情報の表示
  * - 走者の有無に応じた走塁ボタン（盗塁、盗塁刺、暴投、牽制死）の自動活性・非活性制御
  * - 直近投球ログスロット（#log-slot）の自動更新
@@ -41,7 +41,7 @@ export class RunnerDiamondComponent {
 
   render() {
     this.container.innerHTML = `
-      <div class="diamond-panel select-none relative">
+      <div class="diamond-panel select-none relative overflow-visible">
         
         <!-- 左側: BSOカウントランプ群 -->
         <div class="bso-group">
@@ -69,20 +69,14 @@ export class RunnerDiamondComponent {
         </div>
 
         <!-- 中央: 走者ダイアモンド (SVG) -->
-        <div class="diamond-svg-wrap relative">
-          <svg viewBox="0 0 100 100" class="w-full h-full">
+        <div class="diamond-svg-wrap relative flex items-center justify-center">
+          <svg viewBox="0 0 100 100" class="w-full h-full overflow-visible">
             <!-- 塁間ライン -->
             <polygon points="50,15 85,50 50,85 15,50" 
                      fill="none" 
                      stroke="#334155" 
                      stroke-width="2" 
                      stroke-dasharray="2 2" />
-            
-            <!-- 本塁 (ホーム) : タップ可能・ホバー演出付き -->
-            <polygon id="base-home" class="cursor-pointer hover:fill-emerald-400 active:scale-95 transition" points="50,83 55,87 55,92 45,92 45,87" 
-                     fill="#94a3b8" 
-                     stroke="#cbd5e1" 
-                     stroke-width="1.5" />
             
             <!-- 2塁 (Second) -->
             <polygon id="base-2" class="base-indicator" points="50,10 56,16 50,22 44,16" data-base="2" />
@@ -92,28 +86,44 @@ export class RunnerDiamondComponent {
             
             <!-- 1塁 (First) -->
             <polygon id="base-1" class="base-indicator" points="85,44 91,50 85,56 79,50" data-base="1" />
-          </svg>
-          <span class="absolute bottom-0 text-[9px] text-slate-400 font-bold tracking-wider">塁・本塁タップで補正</span>
 
-          <!-- 本塁タップ時の得点クイック補正ミニポップオーバー -->
-          <div id="home-score-popover" class="hidden absolute top-2 inset-x-1 bg-slate-900/95 border border-slate-700 rounded-xl p-2 shadow-2xl z-30 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-100">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-1">
-              <span class="text-[10px] font-bold text-slate-300 flex items-center gap-1">
-                <span>🏠</span>
-                <span>本塁得点の手動補正</span>
-              </span>
-              <button type="button" id="btn-close-home-popover" class="text-slate-400 hover:text-white text-xs px-1">✕</button>
-            </div>
-            <div class="grid grid-cols-2 gap-1.5 text-xs font-black">
-              <button type="button" id="btn-home-add-run" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-1.5 rounded-lg shadow flex items-center justify-center gap-0.5 transition">
-                <span>＋1点</span>
-                <span class="text-[9px] font-normal opacity-80">(生還)</span>
-              </button>
-              <button type="button" id="btn-home-sub-run" class="bg-rose-900/80 hover:bg-rose-800 active:scale-95 text-rose-200 py-1.5 rounded-lg border border-rose-700 shadow flex items-center justify-center gap-0.5 transition">
-                <span>−1点</span>
-                <span class="text-[9px] font-normal opacity-80">(取消)</span>
-              </button>
-            </div>
+            <!-- 本塁 (ホーム) グループ: 指先タップ用の大型不可視ヒットエリア付き -->
+            <g id="base-home-group" class="cursor-pointer">
+              <!-- 不可視の大型タッチ判定用サークル（スマホの指でも確実に反応） -->
+              <circle cx="50" cy="86" r="16" fill="transparent" class="cursor-pointer" />
+              <!-- 表示用ホームベース（五角形） -->
+              <polygon id="base-home" class="transition duration-150" 
+                       points="50,80 57,85 57,93 43,93 43,85" 
+                       fill="#94a3b8" 
+                       stroke="#e2e8f0" 
+                       stroke-width="1.8" />
+            </g>
+          </svg>
+          
+          <!-- ガイド文字（pointer-events-noneでクリック妨害を完全遮断） -->
+          <span class="absolute bottom-0 text-[9px] text-slate-400 font-bold tracking-wider pointer-events-none select-none">
+            塁・本塁タップで補正
+          </span>
+        </div>
+
+        <!-- 本塁タップ時の得点クイック補正ポップオーバー（パネル最前面に配置） -->
+        <div id="home-score-popover" class="hidden absolute top-1.5 inset-x-2 sm:inset-x-8 bg-slate-900 border-2 border-emerald-500 rounded-xl p-2.5 shadow-2xl z-40 flex flex-col gap-2">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
+            <span class="text-xs font-black text-slate-200 flex items-center gap-1.5">
+              <span>🏠</span>
+              <span>本塁得点の手動補正</span>
+            </span>
+            <button type="button" id="btn-close-home-popover" class="text-slate-400 hover:text-white text-sm px-2 py-0.5 rounded hover:bg-slate-800">✕</button>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs font-black">
+            <button type="button" id="btn-home-add-run" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-2 rounded-lg shadow-md flex items-center justify-center gap-1 transition">
+              <span class="text-sm">＋1点</span>
+              <span class="text-[10px] font-normal text-emerald-200">(本塁生還)</span>
+            </button>
+            <button type="button" id="btn-home-sub-run" class="bg-rose-900 hover:bg-rose-800 active:scale-95 text-rose-200 py-2 rounded-lg border border-rose-700 shadow-md flex items-center justify-center gap-1 transition">
+              <span class="text-sm">−1点</span>
+              <span class="text-[10px] font-normal text-rose-300">(取消)</span>
+            </button>
           </div>
         </div>
 
@@ -161,15 +171,19 @@ export class RunnerDiamondComponent {
     });
 
     // 本塁（ホームベース）タップで得点補正ポップオーバーを開閉
-    const homeBase = this.container.querySelector("#base-home");
+    const homeGroup = this.container.querySelector("#base-home-group");
     const popover = this.container.querySelector("#home-score-popover");
     const closePopoverBtn = this.container.querySelector("#btn-close-home-popover");
 
-    if (homeBase && popover) {
-      homeBase.addEventListener("click", (e) => {
+    if (homeGroup && popover) {
+      const togglePopover = (e) => {
+        e.preventDefault();
         e.stopPropagation();
         popover.classList.toggle("hidden");
-      });
+      };
+
+      homeGroup.addEventListener("click", togglePopover);
+      homeGroup.addEventListener("touchend", togglePopover);
     }
 
     if (closePopoverBtn && popover) {
@@ -210,7 +224,7 @@ export class RunnerDiamondComponent {
     // ポップオーバー外をタップしたら閉じる
     document.addEventListener("click", (e) => {
       if (popover && !popover.classList.contains("hidden")) {
-        if (!popover.contains(e.target) && e.target !== homeBase) {
+        if (!popover.contains(e.target) && (!homeGroup || !homeGroup.contains(e.target))) {
           popover.classList.add("hidden");
         }
       }
@@ -354,7 +368,6 @@ export class RunnerDiamondComponent {
 
   recordRunnerAction(description, updateFn) {
     const state = this.gameState.getState();
-    // 念のための安全ガード（走者がいなければ絶対に発火しない）
     const hasRunners = Boolean(
       state.runners && (state.runners[1] || state.runners[2] || state.runners[3])
     );
@@ -379,7 +392,6 @@ export class RunnerDiamondComponent {
   // 盗塁成功処理
   handleSteal() {
     this.recordRunnerAction("盗塁成功", (state) => {
-      // 2塁走者がいて3塁空きなら3盗、1塁走者がいて2塁空きなら2盗
       if (state.runners[2] && !state.runners[3]) {
         state.runners[3] = true;
         state.runners[2] = false;
