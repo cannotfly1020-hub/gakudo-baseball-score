@@ -18,7 +18,7 @@ export class TenkeyModalComponent {
 
   /**
    * テンキーモーダルを展開
-   * @param {number} orderIdx 打順インデックス (0〜8)
+   * @param {number|string} orderIdx 打順インデックス (0〜8) または "opp_bench"
    * @param {Object} currentSlot 現在のスロット情報 { number, name, pos }
    */
   open(orderIdx, currentSlot = {}) {
@@ -42,10 +42,16 @@ export class TenkeyModalComponent {
   }
 
   render(orderIdx, initialName) {
+    // 相手控え登録時は「相手 控え選手登録」、通常スロット時は「〇番 相手選手情報入力」と自然に切り替え
+    const isBench = orderIdx === "opp_bench";
+    const titleText = isBench 
+      ? "相手 控え選手登録" 
+      : `${typeof orderIdx === "number" ? orderIdx + 1 : ""}番 相手選手情報入力`;
+
     this.container.innerHTML = `
       <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[280px] p-3.5 shadow-2xl space-y-3">
         <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <h3 class="text-xs font-black text-amber-400">${orderIdx + 1}番 相手選手情報入力</h3>
+          <h3 class="text-xs font-black text-amber-400">${titleText}</h3>
           <button type="button" id="btn-tenkey-close" class="text-slate-400 hover:text-white text-base">✕</button>
         </div>
 
