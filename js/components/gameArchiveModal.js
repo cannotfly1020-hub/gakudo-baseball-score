@@ -398,27 +398,38 @@ export class GameArchiveModalComponent {
     const saveBtn = this.container.querySelector("#btn-save-current-game");
 
     try {
-      if (saveBtn) saveBtn.disabled = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.classList.add("opacity-50");
+      }
+      if (statusMsg) {
+        statusMsg.textContent = "保存中...";
+        statusMsg.className = "text-[10px] text-amber-400 font-bold text-center block animate-pulse";
+      }
+
       const state = this.gameState.getState();
-      await gameArchiveStore.saveGame(state);
+      const savedRecord = await gameArchiveStore.saveGame(state);
 
       if (statusMsg) {
-        statusMsg.textContent = "✓ アーカイブに保存しました";
+        statusMsg.textContent = `✓ アーカイブに保存しました (${savedRecord.summary.awayTeamName} vs ${savedRecord.summary.homeTeamName})`;
         statusMsg.className = "text-[10px] text-emerald-400 font-bold text-center block animate-pulse";
         setTimeout(() => {
           statusMsg.className = "hidden";
-        }, 2500);
+        }, 3000);
       }
 
       await this.loadAndRenderSavedGames();
     } catch (err) {
       console.error("試合保存失敗:", err);
       if (statusMsg) {
-        statusMsg.textContent = "⚠️ 保存に失敗しました";
+        statusMsg.textContent = `⚠️ 保存に失敗しました: ${err.message || err}`;
         statusMsg.className = "text-[10px] text-rose-400 font-bold text-center block";
       }
     } finally {
-      if (saveBtn) saveBtn.disabled = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.classList.remove("opacity-50");
+      }
     }
   }
 
