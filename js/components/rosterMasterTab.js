@@ -1,20 +1,13 @@
 /**
  * js/components/rosterMasterTab.js
- * 団員名簿マスタ タブ（選手情報の編集・修正・フルネーム完全抽出・大型テキストエリア一括取込）
+ * 団員名簿マスタ タブ（公式戦背番号の「なし/空欄」完全対応版）
  */
 
 export class RosterMasterTabComponent {
-  /**
-   * @param {HTMLElement} containerElement 描画対象のコンテナ要素
-   * @param {Object} options コールバックと設定
-   *   - getRoster: () => Array
-   *   - onSave: (updatedRoster) => void
-   *   - getMatchType: () => "official" | "practice"
-   */
   constructor(containerElement, options = {}) {
     this.container = containerElement;
     this.options = options;
-    this.editingPlayerIndex = null; // null: 新規追加, 数値: 編集対象インデックス
+    this.editingPlayerIndex = null;
   }
 
   render() {
@@ -54,29 +47,36 @@ export class RosterMasterTabComponent {
               ${roster.length === 0 ? `
                 <tr>
                   <td colspan="6" class="py-6 text-center text-slate-500 text-xs">
-                    選手が登録されていません。「テキスト一括取込」から名簿を登録してください。
+                    選手が登録されていません。「＋ 選手を追加」または「テキスト一括取込」から登録してください。
                   </td>
                 </tr>
               ` : roster
-                .map(
-                  (p, idx) => `
-                <tr class="hover:bg-slate-800/40">
-                  <td class="py-1.5 px-2 font-mono font-black text-indigo-400">#${p.officialNumber ?? p.number ?? "-"}</td>
-                  <td class="py-1.5 px-2 font-mono font-black text-emerald-400">#${p.practiceNumber ?? p.number ?? "-"}</td>
-                  <td class="py-1.5 px-2 font-bold text-slate-100">${p.name}</td>
-                  <td class="py-1.5 px-1 text-slate-400 text-center">${p.grade || 6}年</td>
-                  <td class="py-1.5 px-1 font-bold text-amber-300 text-center">${p.pos || "投"}</td>
-                  <td class="py-1.5 px-2 text-right space-x-1">
-                    <button type="button" class="btn-edit-player text-sky-300 hover:text-sky-200 text-[10px] font-bold px-2 py-0.5 rounded bg-sky-950/70 border border-sky-800 transition" data-idx="${idx}">
-                      編集
-                    </button>
-                    <button type="button" class="btn-delete-player text-rose-400 hover:text-rose-300 text-[10px] px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-900 transition" data-idx="${idx}">
-                      削除
-                    </button>
-                  </td>
-                </tr>
-              `
-                )
+                .map((p, idx) => {
+                  const hasOff = p.officialNumber !== null && p.officialNumber !== undefined && p.officialNumber !== "";
+                  const hasPrac = p.practiceNumber !== null && p.practiceNumber !== undefined && p.practiceNumber !== "";
+
+                  return `
+                    <tr class="hover:bg-slate-800/40">
+                      <td class="py-1.5 px-2 font-mono font-black ${hasOff ? 'text-indigo-400' : 'text-slate-500 font-normal'}">
+                        ${hasOff ? `#${p.officialNumber}` : '<span class="text-[11px] text-slate-500 font-sans">なし</span>'}
+                      </td>
+                      <td class="py-1.5 px-2 font-mono font-black ${hasPrac ? 'text-emerald-400' : 'text-slate-500 font-normal'}">
+                        ${hasPrac ? `#${p.practiceNumber}` : '<span class="text-[11px] text-slate-500 font-sans">なし</span>'}
+                      </td>
+                      <td class="py-1.5 px-2 font-bold text-slate-100">${p.name}</td>
+                      <td class="py-1.5 px-1 text-slate-400 text-center">${p.grade || 6}年</td>
+                      <td class="py-1.5 px-1 font-bold text-amber-300 text-center">${p.pos || "投"}</td>
+                      <td class="py-1.5 px-2 text-right space-x-1">
+                        <button type="button" class="btn-edit-player text-sky-300 hover:text-sky-200 text-[10px] font-bold px-2 py-0.5 rounded bg-sky-950/70 border border-sky-800 transition" data-idx="${idx}">
+                          編集
+                        </button>
+                        <button type="button" class="btn-delete-player text-rose-400 hover:text-rose-300 text-[10px] px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-900 transition" data-idx="${idx}">
+                          削除
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+                })
                 .join("")}
             </tbody>
           </table>
@@ -96,18 +96,22 @@ export class RosterMasterTabComponent {
 
           <form id="form-player-edit" class="space-y-2.5 text-xs">
             <div>
-              <label class="block text-[10px] font-bold text-slate-400 mb-0.5">氏名 (フルネーム)</label>
+              <label class="block text-[10px] font-bold text-slate-400 mb-0.5">氏名 (フルネーム) <span class="text-rose-400">*必須</span></label>
               <input type="text" id="input-edit-name" required placeholder="例: 森山 惇都" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-bold outline-none">
             </div>
 
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="block text-[10px] font-bold text-indigo-300 mb-0.5">公式戦背番号 (#)</label>
-                <input type="number" id="input-edit-off-num" min="0" max="99" required placeholder="例: 7" class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-indigo-300 font-mono font-black text-xs outline-none">
+                <label class="block text-[10px] font-bold text-indigo-300 mb-0.5">
+                  公式戦背番号 (#) <span class="text-[9px] text-slate-400 font-normal">※なしなら空欄</span>
+                </label>
+                <input type="number" id="input-edit-off-num" min="0" max="99" placeholder="未付与は空欄" class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-indigo-300 font-mono font-black text-xs outline-none">
               </div>
               <div>
-                <label class="block text-[10px] font-bold text-emerald-300 mb-0.5">練習試合背番号 (#)</label>
-                <input type="number" id="input-edit-prac-num" min="0" max="99" required placeholder="例: 8" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-emerald-300 font-mono font-black text-xs outline-none">
+                <label class="block text-[10px] font-bold text-emerald-300 mb-0.5">
+                  練習試合背番号 (#) <span class="text-[9px] text-slate-400 font-normal">※任意</span>
+                </label>
+                <input type="number" id="input-edit-prac-num" min="0" max="99" placeholder="例: 8" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-emerald-300 font-mono font-black text-xs outline-none">
               </div>
             </div>
 
@@ -165,10 +169,10 @@ export class RosterMasterTabComponent {
 
           <p class="text-[11px] text-slate-300 leading-relaxed">
             Markdownや箇条書きのテキストをそのまま貼り付けてください。<br>
-            <span class="text-indigo-400 font-bold">「見出し」や「記号 -」は自動判別され、フルネームと背番号が抽出されます。</span>
+            <span class="text-indigo-400 font-bold">「見出し」や「記号 -」は自動判別され、公式背番号がない選手も柔軟に抽出されます。</span>
           </p>
 
-          <textarea id="textarea-batch-input" rows="8" placeholder="ここにテキストを丸ごと貼り付けてください&#10;例:&#10;- 7 森山 惇都 8&#10;- 佐甲 大知 25&#10;- 5 西田 圭佑 91" class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl p-3 text-xs text-slate-200 outline-none font-mono leading-relaxed resize-none"></textarea>
+          <textarea id="textarea-batch-input" rows="8" placeholder="ここにテキストを丸ごと貼り付けてください&#10;例:&#10;- 7 森山 惇都 8&#10;- 松本 蓮 75&#10;- 5 西田 圭佑 91" class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl p-3 text-xs text-slate-200 outline-none font-mono leading-relaxed resize-none"></textarea>
 
           <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800">
             <span id="import-preview-count" class="text-[11px] font-bold text-slate-400">貼り付け待ち...</span>
@@ -189,13 +193,11 @@ export class RosterMasterTabComponent {
   }
 
   bindEvents() {
-    // 1. 選手追加ボタン（編集モーダルを新規モードで展開）
     const btnAdd = this.container.querySelector("#btn-open-add-player");
     if (btnAdd) {
       btnAdd.addEventListener("click", () => this.openEditModal(null));
     }
 
-    // 2. 名簿全消去
     const btnClear = this.container.querySelector("#btn-clear-roster");
     if (btnClear) {
       btnClear.addEventListener("click", () => {
@@ -205,7 +207,6 @@ export class RosterMasterTabComponent {
       });
     }
 
-    // 3. 各行の「編集」ボタン
     this.container.querySelectorAll(".btn-edit-player").forEach((btn) => {
       btn.addEventListener("click", () => {
         const idx = parseInt(btn.getAttribute("data-idx"), 10);
@@ -213,7 +214,6 @@ export class RosterMasterTabComponent {
       });
     });
 
-    // 4. 各行の「削除」ボタン
     this.container.querySelectorAll(".btn-delete-player").forEach((btn) => {
       btn.addEventListener("click", () => {
         const idx = parseInt(btn.getAttribute("data-idx"), 10);
@@ -221,7 +221,6 @@ export class RosterMasterTabComponent {
       });
     });
 
-    // 5. 編集モーダル内のイベント
     const editModal = this.container.querySelector("#player-edit-modal");
     const btnCloseEdit = this.container.querySelector("#btn-close-edit-modal");
     const btnCancelEdit = this.container.querySelector("#btn-cancel-edit");
@@ -242,7 +241,6 @@ export class RosterMasterTabComponent {
       });
     }
 
-    // 6. 一括取込モーダルのイベント
     this.bindBatchImportEvents();
   }
 
@@ -259,19 +257,17 @@ export class RosterMasterTabComponent {
     if (!modal) return;
 
     if (idx !== null) {
-      // 既存選手の編集モード
       const roster = this.options.getRoster();
       const player = roster[idx];
       if (!player) return;
 
       if (titleEl) titleEl.innerHTML = `<span>✏️</span><span>選手情報の編集</span>`;
       if (inputName) inputName.value = player.name || "";
-      if (inputOff) inputOff.value = player.officialNumber ?? player.number ?? "";
-      if (inputPrac) inputPrac.value = player.practiceNumber ?? player.number ?? "";
+      if (inputOff) inputOff.value = (player.officialNumber !== null && player.officialNumber !== undefined) ? player.officialNumber : "";
+      if (inputPrac) inputPrac.value = (player.practiceNumber !== null && player.practiceNumber !== undefined) ? player.practiceNumber : "";
       if (selectGrade) selectGrade.value = String(player.grade || 6);
       if (selectPos) selectPos.value = player.pos || "投";
     } else {
-      // 新規選手の追加モード
       if (titleEl) titleEl.innerHTML = `<span>＋</span><span>新規選手の追加</span>`;
       if (inputName) inputName.value = "";
       if (inputOff) inputOff.value = "";
@@ -295,28 +291,29 @@ export class RosterMasterTabComponent {
     const name = inputName ? inputName.value.trim() : "";
     if (!name) return;
 
-    const offNum = inputOff && inputOff.value !== "" ? parseInt(inputOff.value, 10) : 0;
-    const pracNum = inputPrac && inputPrac.value !== "" ? parseInt(inputPrac.value, 10) : offNum;
+    // 空欄の場合は null（なし）として扱う
+    const offNum = inputOff && inputOff.value.trim() !== "" ? parseInt(inputOff.value, 10) : null;
+    const pracNum = inputPrac && inputPrac.value.trim() !== "" ? parseInt(inputPrac.value, 10) : (offNum ?? null);
     const grade = selectGrade ? parseInt(selectGrade.value, 10) || 6 : 6;
     const pos = selectPos ? selectPos.value : "投";
 
     const roster = this.options.getRoster();
     const matchType = typeof this.options.getMatchType === "function" ? this.options.getMatchType() : "official";
 
+    const currentNumber = matchType === "official" ? offNum : pracNum;
+
     if (this.editingPlayerIndex !== null && roster[this.editingPlayerIndex]) {
-      // 既存選手の上書き更新
       const target = roster[this.editingPlayerIndex];
       target.name = name;
       target.officialNumber = offNum;
       target.practiceNumber = pracNum;
-      target.number = matchType === "official" ? offNum : pracNum;
+      target.number = currentNumber;
       target.grade = grade;
       target.pos = pos;
     } else {
-      // 新規選手の追加
       roster.push({
         id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        number: matchType === "official" ? offNum : pracNum,
+        number: currentNumber,
         officialNumber: offNum,
         practiceNumber: pracNum,
         name: name,
@@ -380,9 +377,10 @@ export class RosterMasterTabComponent {
         const matchType = typeof this.options.getMatchType === "function" ? this.options.getMatchType() : "official";
 
         parsed.forEach((p) => {
+          const currentNumber = matchType === "official" ? p.offNum : p.pracNum;
           roster.push({
             id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            number: matchType === "official" ? p.offNum : p.pracNum,
+            number: currentNumber,
             officialNumber: p.offNum,
             practiceNumber: p.pracNum,
             name: p.name,
@@ -434,8 +432,8 @@ export class RosterMasterTabComponent {
           } else {
             const num = parseInt(parts[0], 10);
             if (!isNaN(num)) {
-              offNum = num;
               pracNum = num;
+              offNum = num <= 20 ? num : null;
               fullName = parts[1] || "";
               grade = parts[2] ? parseInt(parts[2], 10) || 6 : 6;
               pos = parts[3] || "投";
@@ -452,22 +450,23 @@ export class RosterMasterTabComponent {
           const matchNameFirst = line.match(/^(.+?)\s+(\d+)$/);
           if (matchNameFirst) {
             const num = parseInt(matchNameFirst[2], 10);
-            offNum = num;
-            pracNum = num;
             fullName = matchNameFirst[1].trim();
+            pracNum = num;
+            // 学童野球において21番以上などは公式戦背番号未付与と推定
+            offNum = num <= 20 ? num : null;
           } else {
             const matchNumFirst = line.match(/^(\d+)\s+(.+)$/);
             if (matchNumFirst) {
               const num = parseInt(matchNumFirst[1], 10);
-              offNum = num;
-              pracNum = num;
               fullName = matchNumFirst[2].trim();
+              pracNum = num;
+              offNum = num <= 20 ? num : null;
             }
           }
         }
       }
 
-      if (fullName && offNum !== null && pracNum !== null) {
+      if (fullName && pracNum !== null) {
         results.push({
           offNum,
           pracNum,
