@@ -1,15 +1,12 @@
 /**
  * js/components/gameArchiveModal.js
- * 過去試合アーカイブ・履歴管理モーダルコンポーネント（CSV出力統合・完全版）
+ * 過去試合アーカイブ・履歴管理モーダルコンポーネント（完全自律・確実開閉版）
  * 
- * 主な機能:
- * - 現在の試合のワンタップアーカイブ保存（IndexedDB永続化）
- * - 現在記録中試合のCSVワンタップ出力
- * - 保存済み過去試合一覧のカード描画（日付、大会名、対戦カード、スコア、勝敗バッジ）
- * - 過去試合の公式スコア表（A4印刷・PDF）即時閲覧
- * - 過去試合のグラウンド復元・再開機能
- * - 過去試合ごとのCSV個別エクスポート
- * - 誤操作防止の2段階削除確認ダイアログ
+ * 構造設計の刷新:
+ * - 親コンテナ (#archive-modal-slot) へのクラス競合 (hidden vs flex) を完全撤廃
+ * - 内部に独立した #archive-modal-backdrop を構築し、安全にオーバーレイを描画
+ * - 初期化時に style.display = "none" を直接指定し、起動時即座の非表示を物理的に保証
+ * - CSV出力（現在試合・過去試合）を完全統合
  */
 
 import { gameArchiveStore } from "../storage/gameArchiveStore.js";
@@ -26,102 +23,115 @@ export class GameArchiveModalComponent {
     this.gameState = gameState;
     this.options = options;
 
-    this.pendingDeleteId = null; // 削除確認中の試合ID
+    this.pendingDeleteId = null;
+
+    // 1. 初期状態として物理的に非表示を最優先確定
+    this.container.classList.add("hidden");
+    this.container.style.display = "none";
+
     this.init();
   }
 
   init() {
     this.render();
     this.bindEvents();
+
+    // 2. 描画後も確実に非表示状態を二重保証
+    this.close();
   }
 
   render() {
-    this.container.className = "hidden fixed inset-0 bg-black/85 z-50 p-2 sm:p-4 overflow-y-auto flex items-center justify-center select-none";
+    // 親要素の className は汚さず、クラス競合をゼロにする
     this.container.innerHTML = `
-      <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn">
+      <!-- モーダル背景オーバーレイ（flex はこの内部要素でのみ使用） -->
+      <div id="archive-modal-backdrop" class="fixed inset-0 bg-black/85 z-50 p-2 sm:p-4 overflow-y-auto flex items-center justify-center select-none animate-fadeIn">
         
-        <!-- モーダルヘッダー -->
-        <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-800 bg-slate-950/70 flex-shrink-0">
-          <div class="flex items-center gap-2">
-            <span class="text-base sm:text-lg">📁</span>
-            <h2 class="text-xs sm:text-sm font-black text-slate-100">試合アーカイブ・履歴管理</h2>
-            <span class="text-[10px] bg-slate-800 text-indigo-400 font-mono font-bold px-1.5 py-0.5 rounded border border-indigo-900/50">
-              オフライン保存
-            </span>
-          </div>
-          <button type="button" id="btn-close-archive-modal" class="text-slate-400 hover:text-white text-base px-2 py-1 rounded-lg hover:bg-slate-800 transition">
-            ✕
-          </button>
-        </div>
-
-        <!-- スクロール可能コンテンツ領域 -->
-        <div class="p-3 overflow-y-auto space-y-3 flex-1">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden" onclick="event.stopPropagation()">
           
-          <!-- 現在の試合 保存アクションカード -->
-          <div class="bg-slate-950/80 border border-emerald-900/60 rounded-xl p-3 flex-shrink-0 space-y-2">
-            <div class="flex items-center justify-between text-xs">
-              <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                <span>⚾️</span>
-                <span>現在記録中の試合:</span>
-              </span>
-              <span id="current-game-quick-summary" class="text-[10px] text-emerald-400 font-bold font-mono">
-                集計中...
-              </span>
-            </div>
-
+          <!-- モーダルヘッダー -->
+          <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-800 bg-slate-950/70 flex-shrink-0">
             <div class="flex items-center gap-2">
-              <button type="button" id="btn-save-current-game" class="flex-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black py-2 px-2 rounded-lg text-xs shadow-md transition flex items-center justify-center gap-1.5">
-                <span>💾</span>
-                <span class="truncate">アーカイブに保存</span>
-              </button>
-              <button type="button" id="btn-export-current-csv" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 font-bold py-2 px-3 rounded-lg text-xs border border-emerald-900/60 transition flex items-center justify-center gap-1" title="現在の試合のCSVを出力">
-                <span>📤</span>
-                <span class="truncate">CSV</span>
-              </button>
+              <span class="text-base sm:text-lg">📁</span>
+              <h2 class="text-xs sm:text-sm font-black text-slate-100">試合アーカイブ・履歴管理</h2>
+              <span class="text-[10px] bg-slate-800 text-indigo-400 font-mono font-bold px-1.5 py-0.5 rounded border border-indigo-900/50">
+                オフライン保存
+              </span>
             </div>
-            <p id="save-status-msg" class="text-[10px] text-slate-400 text-center hidden"></p>
+            <button type="button" id="btn-close-archive-modal" class="text-slate-400 hover:text-white text-base px-2 py-1 rounded-lg hover:bg-slate-800 transition">
+              ✕
+            </button>
           </div>
 
-          <!-- 保存済み試合一覧ヘッダー -->
-          <div class="flex items-center justify-between pt-1">
-            <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-              <span>📚</span>
-              <span>保存済みの試合一覧</span>
-            </span>
-            <span id="saved-games-count" class="text-[10px] text-slate-500 font-mono font-bold">0試合</span>
-          </div>
+          <!-- スクロール可能コンテンツ領域 -->
+          <div class="p-3 overflow-y-auto space-y-3 flex-1">
+            
+            <!-- 現在の試合 保存アクションカード -->
+            <div class="bg-slate-950/80 border border-emerald-900/60 rounded-xl p-3 flex-shrink-0 space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                  <span>⚾️</span>
+                  <span>現在記録中の試合:</span>
+                </span>
+                <span id="current-game-quick-summary" class="text-[10px] text-emerald-400 font-bold font-mono">
+                  集計中...
+                </span>
+              </div>
 
-          <!-- 過去試合カードリスト受皿 -->
-          <div id="saved-games-list" class="space-y-2 min-h-[140px]">
-            <div class="text-center py-8 text-xs text-slate-500">
-              読み込み中...
+              <div class="flex items-center gap-2">
+                <button type="button" id="btn-save-current-game" class="flex-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black py-2 px-2 rounded-lg text-xs shadow-md transition flex items-center justify-center gap-1.5">
+                  <span>💾</span>
+                  <span class="truncate">アーカイブに保存</span>
+                </button>
+                <button type="button" id="btn-export-current-csv" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 font-bold py-2 px-3 rounded-lg text-xs border border-emerald-900/60 transition flex items-center justify-center gap-1" title="現在の試合のCSVを出力">
+                  <span>📤</span>
+                  <span class="truncate">CSV</span>
+                </button>
+              </div>
+              <p id="save-status-msg" class="text-[10px] text-slate-400 text-center hidden"></p>
             </div>
+
+            <!-- 保存済み試合一覧ヘッダー -->
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                <span>📚</span>
+                <span>保存済みの試合一覧</span>
+              </span>
+              <span id="saved-games-count" class="text-[10px] text-slate-500 font-mono font-bold">0試合</span>
+            </div>
+
+            <!-- 過去試合カードリスト受皿 -->
+            <div id="saved-games-list" class="space-y-2 min-h-[140px]">
+              <div class="text-center py-8 text-xs text-slate-500">
+                読み込み中...
+              </div>
+            </div>
+
           </div>
 
         </div>
 
-      </div>
-
-      <!-- 削除確認ダイアログ（2段階確認） -->
-      <div id="delete-confirm-dialog" class="hidden fixed inset-0 bg-black/80 z-60 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-rose-900/80 rounded-2xl w-full max-w-xs p-3.5 shadow-2xl space-y-2.5 animate-fadeIn">
-          <div class="flex items-center gap-2 text-rose-400 border-b border-slate-800 pb-1.5">
-            <span class="text-base">⚠️</span>
-            <h4 class="font-black text-xs text-slate-200">過去試合の削除</h4>
-          </div>
-          <p class="text-xs text-slate-300 leading-relaxed">
-            選択した試合データをアーカイブから完全に削除します。<br>
-            <span class="text-rose-400 font-bold">※この操作は元に戻せません。</span>
-          </p>
-          <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
-            <button type="button" id="btn-cancel-delete" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition">
-              キャンセル
-            </button>
-            <button type="button" id="btn-confirm-delete" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-black rounded-lg transition shadow">
-              削除実行
-            </button>
+        <!-- 削除確認ダイアログ（2段階確認） -->
+        <div id="delete-confirm-dialog" class="hidden fixed inset-0 bg-black/80 z-60 flex items-center justify-center p-4">
+          <div class="bg-slate-900 border border-rose-900/80 rounded-2xl w-full max-w-xs p-3.5 shadow-2xl space-y-2.5 animate-fadeIn" onclick="event.stopPropagation()">
+            <div class="flex items-center gap-2 text-rose-400 border-b border-slate-800 pb-1.5">
+              <span class="text-base">⚠️</span>
+              <h4 class="font-black text-xs text-slate-200">過去試合の削除</h4>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              選択した試合データをアーカイブから完全に削除します。<br>
+              <span class="text-rose-400 font-bold">※この操作は元に戻せません。</span>
+            </p>
+            <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
+              <button type="button" id="btn-cancel-delete" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition">
+                キャンセル
+              </button>
+              <button type="button" id="btn-confirm-delete" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-black rounded-lg transition shadow">
+                削除実行
+              </button>
+            </div>
           </div>
         </div>
+
       </div>
     `;
   }
@@ -243,12 +253,15 @@ export class GameArchiveModalComponent {
       });
     }
 
-    // 背景タップで閉じる
-    this.container.addEventListener("click", (e) => {
-      if (e.target === this.container) {
-        this.close();
-      }
-    });
+    // 背景黒部分タップで閉じる
+    const backdrop = this.container.querySelector("#archive-modal-backdrop");
+    if (backdrop) {
+      backdrop.addEventListener("click", (e) => {
+        if (e.target === backdrop) {
+          this.close();
+        }
+      });
+    }
   }
 
   bindCardEvents() {
@@ -390,13 +403,23 @@ export class GameArchiveModalComponent {
     summaryEl.textContent = `${awayName} ${awayScoreTotal} - ${homeScoreTotal} ${homeName} (${state.inning || 1}回)`;
   }
 
+  /**
+   * モーダルを展開する
+   * CSSクラスとインラインスタイルの双方で確実に表示
+   */
   open() {
     this.updateCurrentGameQuickSummary();
     this.loadAndRenderSavedGames();
     this.container.classList.remove("hidden");
+    this.container.style.display = "block";
   }
 
+  /**
+   * モーダルを閉じる（非表示にする）
+   * CSSクラスとインラインスタイルの双方で物理的に非表示を強制
+   */
   close() {
     this.container.classList.add("hidden");
+    this.container.style.display = "none";
   }
 }
