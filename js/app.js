@@ -211,18 +211,6 @@ class BaseballApp {
       });
     }
 
-    const exportBtn = document.getElementById("btn-export-csv");
-    if (exportBtn) {
-      exportBtn.addEventListener("click", () => {
-        const state = this.gameState.getState();
-        DataExporter.exportGameCsv({
-          date: new Date().toISOString().slice(0, 10),
-          opponent: "相手チーム",
-          history: state.history
-        });
-      });
-    }
-
     // --- 試合リセット確認モーダルの制御 ---
     const resetOpenBtn = document.getElementById("btn-reset-game");
     const resetModal = document.getElementById("reset-confirm-modal");
