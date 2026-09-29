@@ -8,9 +8,9 @@
  * - キャッシュファースト戦略（オフラインでも最新キャッシュを優先返却）
  */
 
-const CACHE_NAME = "gakudo-score-v1";
+const CACHE_NAME = "gakudo-score-v4";
 
-// オフライン時に必要な全アセットリスト
+// オフライン時に必要な全アセットリスト（分割ファイル・アーカイブ・共有を完全網羅）
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -25,9 +25,14 @@ const ASSETS_TO_CACHE = [
   "./js/components/zone.js",
   "./js/components/sprayModal.js",
   "./js/components/rosterView.js",
+  "./js/components/tenkeyModal.js",
+  "./js/components/rosterMasterTab.js",
   "./js/components/scoreSheet.js",
+  "./js/components/gameArchiveModal.js",
   "./js/storage/indexedDb.js",
   "./js/storage/exporter.js",
+  "./js/storage/gameArchiveStore.js",
+  "./js/storage/gameShare.js",
   "https://cdn.tailwindcss.com"
 ];
 
@@ -35,7 +40,7 @@ const ASSETS_TO_CACHE = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // 外部CDNも含め、取得可能なものを確実にキャッシュ
+      // 外部CDNも含め、取得可能なものを確実にキャッシュ（一部失敗しても他を安全に取り込む）
       return Promise.allSettled(
         ASSETS_TO_CACHE.map((url) => cache.add(url).catch((err) => {
           console.warn("キャッシュスキップ (任意):", url, err);
