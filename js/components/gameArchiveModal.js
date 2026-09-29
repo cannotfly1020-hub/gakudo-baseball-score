@@ -11,6 +11,7 @@
 
 import { gameArchiveStore } from "../storage/gameArchiveStore.js";
 import { DataExporter } from "../storage/exporter.js";
+import { GameShareService } from "../storage/gameShare.js";
 
 export class GameArchiveModalComponent {
   /**
@@ -89,6 +90,24 @@ export class GameArchiveModalComponent {
               </div>
               <p id="save-status-msg" class="text-[10px] text-slate-400 text-center hidden"></p>
             </div>
+
+            <!-- 試合データ取り込み（インポート）バー -->
+            <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between gap-2">
+              <div class="flex flex-col">
+                <span class="text-xs font-bold text-slate-300 flex items-center gap-1">
+                  <span>📥</span>
+                  <span>他端末からの試合受信</span>
+                </span>
+                <span class="text-[9px] text-slate-500">LINEやAirDropで届いた .gakudo ファイルを読込</span>
+              </div>
+              <button type="button" id="btn-trigger-import" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold py-1.5 px-3 rounded-lg text-xs transition shadow flex items-center gap-1 flex-shrink-0">
+                <span>＋</span>
+                <span>取込</span>
+              </button>
+              <!-- 隠しファイル入力 -->
+              <input type="file" id="input-game-file" accept=".gakudo,.json" class="hidden">
+            </div>
+            <p id="import-status-msg" class="text-[10px] text-center hidden"></p>
 
             <!-- 保存済み試合一覧ヘッダー -->
             <div class="flex items-center justify-between pt-1">
@@ -185,14 +204,17 @@ export class GameArchiveModalComponent {
         <div class="flex items-center justify-between gap-1.5 pt-0.5">
           <button type="button" class="btn-card-scoresheet flex-1 py-1 px-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-amber-400 font-bold rounded-lg border border-amber-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}">
             <span>📄</span>
-            <span>スコア表</span>
+            <span>スコア</span>
           </button>
           <button type="button" class="btn-card-resume flex-1 py-1 px-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-sky-400 font-bold rounded-lg border border-sky-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}">
             <span>🔄</span>
             <span>再開</span>
           </button>
-          <button type="button" class="btn-card-csv py-1 px-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-emerald-400 font-bold rounded-lg border border-emerald-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}" title="この過去試合のCSVを出力">
+          <button type="button" class="btn-card-share flex-1 py-1 px-1.5 bg-slate-900 hover:bg-indigo-950/60 active:scale-95 text-indigo-400 font-bold rounded-lg border border-indigo-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}" title="LINE・AirDrop等で共有">
             <span>📤</span>
+            <span>共有</span>
+          </button>
+          <button type="button" class="btn-card-csv py-1 px-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-emerald-400 font-bold rounded-lg border border-emerald-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}" title="この過去試合のCSVを出力">
             <span>CSV</span>
           </button>
           <button type="button" class="btn-card-delete py-1 px-2 bg-slate-900 hover:bg-rose-950/60 active:scale-95 text-rose-400 font-bold rounded-lg border border-rose-900/40 text-[11px] flex items-center justify-center transition" data-id="${game.id}" title="この試合を削除">
@@ -227,6 +249,48 @@ export class GameArchiveModalComponent {
           opponent: info.oppTeamName || "相手チーム",
           history: state.history || []
         });
+      });
+    }
+
+    // 試合ファイルのインポート（取込）処理
+    const btnTriggerImport = this.container.querySelector("#btn-trigger-import");
+    const fileInput = this.container.querySelector("#input-game-file");
+    const importMsg = this.container.querySelector("#import-status-msg");
+
+    if (btnTriggerImport && fileInput) {
+      btnTriggerImport.addEventListener("click", () => {
+        fileInput.value = ""; // 連続選択可能にするためリセット
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        try {
+          if (importMsg) {
+            importMsg.textContent = "ファイルを解析中...";
+            importMsg.className = "text-[10px] text-indigo-400 font-bold text-center block";
+          }
+
+          const result = await GameShareService.importGameFile(file);
+          if (result && result.success) {
+            if (importMsg) {
+              importMsg.textContent = `✓ 試合を取り込みました: ${result.summary.awayTeamName || ""} vs ${result.summary.homeTeamName || ""}`;
+              importMsg.className = "text-[10px] text-emerald-400 font-bold text-center block animate-pulse";
+              setTimeout(() => {
+                importMsg.className = "hidden";
+              }, 3000);
+            }
+            await this.loadAndRenderSavedGames();
+          }
+        } catch (err) {
+          console.error("試合インポート失敗:", err);
+          if (importMsg) {
+            importMsg.textContent = `⚠️ 取り込み失敗: ${err.message}`;
+            importMsg.className = "text-[10px] text-rose-400 font-bold text-center block";
+          }
+        }
       });
     }
 
@@ -283,6 +347,20 @@ export class GameArchiveModalComponent {
       btn.addEventListener("click", () => {
         const gameId = btn.getAttribute("data-id");
         this.handleResumeGame(gameId);
+      });
+    });
+
+    // 試合データ共有（LINE・AirDrop等）
+    this.container.querySelectorAll(".btn-card-share").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const gameId = btn.getAttribute("data-id");
+        try {
+          const record = await gameArchiveStore.getGameById(gameId);
+          if (!record) return;
+          await GameShareService.shareGame(record);
+        } catch (err) {
+          console.error("共有エラー:", err);
+        }
       });
     });
 
