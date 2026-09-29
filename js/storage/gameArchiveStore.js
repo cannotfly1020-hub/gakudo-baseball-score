@@ -2,15 +2,14 @@
  * js/storage/gameArchiveStore.js
  * 過去試合アーカイブ・CRUD（保存・一覧取得・個別取得・削除）ストレージモジュール
  * 
- * 特徴:
- * - 既存のリアルタイム1球保存（active_game）とは独立して動作
- * - 試合ごとの一意なID（game_YYYYMMDD_HHMMSS）を発行
- * - 試合サマリー（日付、大会名、対戦カード、スコア、勝敗）を即座に一覧表示できるよう最適化
- * - 年間成績集計のための「全試合一括取得」にも対応
+ * 改善点:
+ * - 既存のリアルタイム1球保存DBとのバージョン競合（IndexedDB Blocked問題）を完全根絶するため、
+ *   アーカイブ専用の独立データベース "GakudoBaseballArchiveDB" を採用。
+ * - 接続ハングを防ぐタイムアウト安全弁（3秒）と onblocked 検知を完備。
  */
 
-const DB_NAME = "GakudoBaseballDB";
-const DB_VERSION = 2; // 過去試合用ストア追加に伴うバージョン定義
+const DB_NAME = "GakudoBaseballArchiveDB"; // 独立したアーカイブ専用DB
+const DB_VERSION = 1;
 const STORE_SAVED_GAMES = "saved_games";
 
 export class GameArchiveStore {
@@ -19,46 +18,50 @@ export class GameArchiveStore {
   }
 
   /**
-   * IndexedDBの初期化・接続
-   * 既存のストアを壊さずに 'saved_games' ストアを安全に確保
+   * IndexedDBの初期化・接続（完全独立・非競合）
    */
   async getDb() {
     if (this.db) return this.db;
 
     return new Promise((resolve, reject) => {
+      // 3秒以上応答がない場合の安全タイムアウト
+      const timer = setTimeout(() => {
+        reject(new Error("IndexedDBの接続がタイムアウトしました。"));
+      }, 3000);
+
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-        // 過去試合アーカイブ用ストアが存在しなければ作成
         if (!db.objectStoreNames.contains(STORE_SAVED_GAMES)) {
           const store = db.createObjectStore(STORE_SAVED_GAMES, { keyPath: "id" });
           store.createIndex("savedAt", "savedAt", { unique: false });
-          store.createIndex("date", "gameInfo.date", { unique: false });
-        }
-        // active_game（既存のリアルタイム保存）がなければ作成
-        if (!db.objectStoreNames.contains("active_game")) {
-          db.createObjectStore("active_game", { keyPath: "id" });
+          store.createIndex("date", "summary.date", { unique: false });
         }
       };
 
       request.onsuccess = (event) => {
+        clearTimeout(timer);
         this.db = event.target.result;
         resolve(this.db);
       };
 
       request.onerror = (event) => {
+        clearTimeout(timer);
         console.error("GameArchiveStore: DBオープン失敗", event.target.error);
         reject(event.target.error);
+      };
+
+      request.onblocked = () => {
+        clearTimeout(timer);
+        console.warn("GameArchiveStore: DBが別タブでブロックされています。");
+        reject(new Error("データベースがロックされています。他のタブを閉じてお試しください。"));
       };
     });
   }
 
   /**
    * 現在の GameState を過去試合アーカイブとして新規保存
-   * @param {Object} gameState 試合の状態オブジェクト
-   * @param {string} [customTitle] 任意の試合タイトル（未指定時は自動生成）
-   * @returns {Promise<Object>} 保存された試合レコード
    */
   async saveGame(gameState, customTitle = "") {
     const db = await this.getDb();
@@ -67,7 +70,6 @@ export class GameArchiveStore {
     const timestampStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const gameId = `game_${timestampStr}`;
 
-    // 試合サマリー情報の抽出
     const info = gameState.gameInfo || {};
     const teams = gameState.teams || {};
     const awayScore = gameState.awayScore || [];
@@ -83,7 +85,6 @@ export class GameArchiveStore {
     if (awayTotal > homeTotal) winner = "away";
     else if (homeTotal > awayTotal) winner = "home";
 
-    // 保存レコードの構築（ディープコピーで安全に分離）
     const record = {
       id: gameId,
       savedAt: now.toISOString(),
@@ -100,7 +101,6 @@ export class GameArchiveStore {
         innings: gameState.inning || 1,
         totalPitches: gameState.pitchCount || 0
       },
-      // 試合の完全な復元・スコア表表示・通算集計用の全データ
       gameState: JSON.parse(JSON.stringify(gameState))
     };
 
@@ -115,8 +115,7 @@ export class GameArchiveStore {
   }
 
   /**
-   * 保存済み全試合の一覧（サマリー）を新しい順（降順）で取得
-   * @returns {Promise<Array>} 試合一覧の配列
+   * 保存済み全試合の一覧を降順で取得
    */
   async getAllGames() {
     const db = await this.getDb();
@@ -127,7 +126,6 @@ export class GameArchiveStore {
 
       req.onsuccess = () => {
         const list = req.result || [];
-        // savedAt の降順（新しい試合が一番上）に並び替え
         list.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
         resolve(list);
       };
@@ -136,9 +134,7 @@ export class GameArchiveStore {
   }
 
   /**
-   * 特定の試合データを1件取得（スコア表閲覧や再開用）
-   * @param {string} gameId 
-   * @returns {Promise<Object|null>}
+   * 特定の試合データを1件取得
    */
   async getGameById(gameId) {
     const db = await this.getDb();
@@ -153,9 +149,7 @@ export class GameArchiveStore {
   }
 
   /**
-   * 特定の試合をアーカイブから削除
-   * @param {string} gameId 
-   * @returns {Promise<boolean>}
+   * 特定の試合を削除
    */
   async deleteGame(gameId) {
     const db = await this.getDb();
@@ -170,5 +164,4 @@ export class GameArchiveStore {
   }
 }
 
-// シングルトンインスタンスとしてエクスポート
 export const gameArchiveStore = new GameArchiveStore();
