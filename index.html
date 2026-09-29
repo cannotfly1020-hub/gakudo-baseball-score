@@ -41,8 +41,8 @@
       <p class="text-[10px] text-slate-500 font-mono hidden sm:block">gakudo-baseball-score</p>
     </div>
 
-    <!-- 下段：5等分均等アクションボタン（PC・スマホともに高さ・幅が完全統一） -->
-    <div class="grid grid-cols-5 gap-1.5 sm:gap-2 w-full max-w-full sm:max-w-2xl">
+    <!-- 下段：均等アクションボタン（過去試合ボタン統合・PC/スマホ両対応） -->
+    <div class="grid grid-cols-6 gap-1 sm:gap-2 w-full max-w-full sm:max-w-2xl">
       <button id="btn-open-roster" type="button" class="h-9 px-1 sm:px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1 shadow transition">
         <span>📋</span>
         <span class="truncate">オーダー</span>
@@ -50,6 +50,10 @@
       <button id="btn-open-scoresheet" type="button" class="h-9 px-1 sm:px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-400 text-xs font-bold rounded-lg border border-amber-900/50 flex items-center justify-center gap-1 shadow transition" title="公式記録サマリーシート（印刷・PDF）">
         <span>📄</span>
         <span class="truncate">スコア表</span>
+      </button>
+      <button id="btn-open-archive" type="button" class="h-9 px-1 sm:px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-indigo-400 text-xs font-bold rounded-lg border border-indigo-900/50 flex items-center justify-center gap-1 shadow transition" title="保存済み過去試合一覧・アーカイブ">
+        <span>📁</span>
+        <span class="truncate">過去試合</span>
       </button>
       <button id="btn-export-csv" type="button" class="h-9 px-1 sm:px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 text-xs font-bold rounded-lg border border-emerald-900/50 flex items-center justify-center gap-1 shadow transition" title="公式スコアCSVを保存">
         <span>📤</span>
@@ -107,6 +111,9 @@
 
   <!-- 公式記録サマリーシート（A4印刷・PDF出力）モーダル -->
   <div id="scoresheet-modal-slot" class="hidden"></div>
+
+  <!-- 過去試合アーカイブ・履歴管理モーダル -->
+  <div id="archive-modal-slot" class="hidden"></div>
 
   <!-- リセット確認ダイアログ（誤操作を完全に防ぐ2段階モーダル） -->
   <div id="reset-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 select-none">
