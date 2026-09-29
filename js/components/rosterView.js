@@ -17,17 +17,17 @@ export const POSITIONS = [
 ];
 
 const DEFAULT_ROSTER = [
-  { id: "p1", number: 1, name: "山田 太郎", grade: 6, throws: "右", bats: "右", pos: "投" },
-  { id: "p2", number: 2, name: "佐藤 健一", grade: 6, throws: "右", bats: "右", pos: "捕" },
-  { id: "p3", number: 3, name: "田中 拓海", grade: 6, throws: "右", bats: "左", pos: "一" },
-  { id: "p4", number: 4, name: "伊藤 陸", grade: 5, throws: "右", bats: "右", pos: "二" },
-  { id: "p5", number: 5, name: "中村 蓮", grade: 6, throws: "右", bats: "右", pos: "三" },
-  { id: "p6", number: 6, name: "小林 隼人", grade: 6, throws: "右", bats: "左", pos: "遊" },
-  { id: "p7", number: 7, name: "金子 真怜", grade: 5, throws: "右", bats: "左", pos: "中" },
-  { id: "p8", number: 8, name: "渡辺 航", grade: 5, throws: "左", bats: "左", pos: "左" },
-  { id: "p9", number: 9, name: "加藤 蒼空", grade: 4, throws: "右", bats: "右", pos: "右" },
-  { id: "p10", number: 10, name: "高橋 翔太", grade: 5, throws: "右", bats: "右", pos: "投" },
-  { id: "p11", number: 11, name: "松本 奏汰", grade: 4, throws: "右", bats: "右", pos: "外" }
+  { id: "p1", number: 10, officialNumber: 10, practiceNumber: 1, name: "山田 太郎", grade: 6, throws: "右", bats: "右", pos: "投" },
+  { id: "p2", number: 1, officialNumber: 1, practiceNumber: 2, name: "佐藤 健一", grade: 6, throws: "右", bats: "右", pos: "捕" },
+  { id: "p3", number: 3, officialNumber: 3, practiceNumber: 3, name: "田中 拓海", grade: 6, throws: "右", bats: "左", pos: "一" },
+  { id: "p4", number: 4, officialNumber: 4, practiceNumber: 4, name: "伊藤 陸", grade: 5, throws: "右", bats: "右", pos: "二" },
+  { id: "p5", number: 5, officialNumber: 5, practiceNumber: 5, name: "中村 蓮", grade: 6, throws: "右", bats: "右", pos: "三" },
+  { id: "p6", number: 6, officialNumber: 6, practiceNumber: 6, name: "小林 隼人", grade: 6, throws: "右", bats: "左", pos: "遊" },
+  { id: "p7", number: 7, officialNumber: 7, practiceNumber: 7, name: "金子 真怜", grade: 5, throws: "右", bats: "左", pos: "中" },
+  { id: "p8", number: 8, officialNumber: 8, practiceNumber: 8, name: "渡辺 航", grade: 5, throws: "左", bats: "左", pos: "左" },
+  { id: "p9", number: 9, officialNumber: 9, practiceNumber: 9, name: "加藤 蒼空", grade: 4, throws: "右", bats: "右", pos: "右" },
+  { id: "p10", number: 11, officialNumber: 11, practiceNumber: 10, name: "高橋 翔太", grade: 5, throws: "右", bats: "右", pos: "投" },
+  { id: "p11", number: 12, officialNumber: 12, practiceNumber: 11, name: "松本 奏汰", grade: 4, throws: "右", bats: "右", pos: "外" }
 ];
 
 export class RosterViewComponent {
@@ -39,6 +39,7 @@ export class RosterViewComponent {
     this.activeSubTab = "order"; // "order" | "roster"
     this.targetTeam = "my"; // "my" | "opp"
     this.myTeamSide = "away"; // "away" (先攻) または "home" (後攻)
+    this.matchType = this.loadMatchType(); // "official" (公式戦) または "practice" (練習試合)
 
     this.roster = this.loadRoster();
     this.myLineup = this.loadLineup("my") || this.generateDefaultLineup();
@@ -142,8 +143,8 @@ export class RosterViewComponent {
         <!-- 先攻・後攻トグル & 自チーム・相手チーム切替 -->
         <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
           
-          <!-- 攻守設定 -->
-          <div class="flex items-center gap-1.5 w-full sm:w-auto">
+          <!-- 攻守設定 & 背番号モード切替 -->
+          <div class="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
             <span class="text-[11px] text-slate-400 font-bold">自チーム:</span>
             <button type="button" id="btn-toggle-attack-side" class="px-2 py-1 rounded font-bold border text-[11px] transition ${
               this.myTeamSide === "away"
@@ -151,6 +152,16 @@ export class RosterViewComponent {
                 : "bg-amber-950 text-amber-300 border-amber-700"
             }">
               ${this.myTeamSide === "away" ? "先攻 (1回表)" : "後攻 (1回裏)"}
+            </button>
+
+            <!-- 公式戦 / 練習試合 2系統背番号切替トグル -->
+            <button type="button" id="btn-toggle-match-type" class="px-2 py-1 rounded font-bold border text-[11px] transition flex items-center gap-1 ${
+              this.matchType === "official"
+                ? "bg-indigo-950 text-indigo-300 border-indigo-700 hover:bg-indigo-900/60"
+                : "bg-emerald-950 text-emerald-300 border-emerald-700 hover:bg-emerald-900/60"
+            }" title="背番号の登録モード（公式戦/練習試合）を切り替えます">
+              <span>${this.matchType === "official" ? "🏆 公式戦背番号" : "⚾️ 練習試合背番号"}</span>
+              <span class="text-[9px] text-slate-400">切替▾</span>
             </button>
           </div>
 
@@ -209,7 +220,10 @@ export class RosterViewComponent {
             ? `
           <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-1">
             <div class="flex items-center justify-between text-[11px]">
-              <span class="font-bold text-slate-400">👥 名簿から打順へ割当:</span>
+              <span class="font-bold text-slate-400 flex items-center gap-1">
+                <span>👥 名簿から打順へ割当</span>
+                <span class="text-[10px] text-indigo-400 font-mono">(${this.matchType === "official" ? "公式戦" : "練習試合"})</span>:
+              </span>
               <button type="button" id="btn-copy-prev-order" class="text-[10px] text-emerald-400 hover:underline">
                 標準オーダーで全自動配置
               </button>
@@ -218,13 +232,14 @@ export class RosterViewComponent {
               ${this.roster
                 .map((p) => {
                   const isAssigned = this.myLineup.some((slot) => slot.playerId === p.id);
+                  const displayNum = this.getPlayerNumber(p);
                   return `
                   <button type="button" class="btn-bench-badge px-2 py-0.5 rounded text-[11px] font-bold border transition flex items-center gap-1 ${
                     isAssigned
                       ? "bg-slate-800/40 border-slate-800 text-slate-600 opacity-50"
                       : "bg-slate-800 border-slate-700 text-emerald-400 hover:bg-emerald-950/50 hover:border-emerald-600 active:scale-95"
                   }" data-player-id="${p.id}">
-                    <span class="font-mono font-black">#${p.number}</span>
+                    <span class="font-mono font-black">#${displayNum}</span>
                     <span class="text-slate-200">${p.name.split(" ")[0]}</span>
                   </button>
                 `;
@@ -260,7 +275,8 @@ export class RosterViewComponent {
           <table class="w-full text-left text-xs border-collapse">
             <thead class="bg-slate-950 sticky top-0 border-b border-slate-800 text-[10px] text-slate-400">
               <tr>
-                <th class="py-1.5 px-2">背番号</th>
+                <th class="py-1.5 px-2">公式#</th>
+                <th class="py-1.5 px-2">練習#</th>
                 <th class="py-1.5 px-2">氏名</th>
                 <th class="py-1.5 px-1">学年</th>
                 <th class="py-1.5 px-1">守備</th>
@@ -272,7 +288,8 @@ export class RosterViewComponent {
                 .map(
                   (p, idx) => `
                 <tr class="hover:bg-slate-800/40">
-                  <td class="py-1.5 px-2 font-mono font-black text-emerald-400">#${p.number}</td>
+                  <td class="py-1.5 px-2 font-mono font-black text-indigo-400">#${p.officialNumber ?? p.number ?? "-"}</td>
+                  <td class="py-1.5 px-2 font-mono font-black text-emerald-400">#${p.practiceNumber ?? p.number ?? "-"}</td>
                   <td class="py-1.5 px-2 font-bold text-slate-200">${p.name}</td>
                   <td class="py-1.5 px-1 text-slate-400">${p.grade}年</td>
                   <td class="py-1.5 px-1 font-bold text-amber-300">${p.pos}</td>
@@ -363,6 +380,18 @@ export class RosterViewComponent {
       });
     }
 
+    // 公式戦 / 練習試合 背番号モード切替
+    const btnMatchType = this.container.querySelector("#btn-toggle-match-type");
+    if (btnMatchType) {
+      btnMatchType.addEventListener("click", () => {
+        this.matchType = this.matchType === "official" ? "practice" : "official";
+        this.saveMatchType(this.matchType);
+        this.syncLineupNumbersWithCurrentMode();
+        this.render();
+        this.bindEvents();
+      });
+    }
+
     // チーム切替
     const btnMy = this.container.querySelector("#team-switch-my");
     const btnOpp = this.container.querySelector("#team-switch-opp");
@@ -423,11 +452,12 @@ export class RosterViewComponent {
 
         const emptyIdx = this.myLineup.findIndex((slot) => !slot.playerId);
         const targetIdx = emptyIdx !== -1 ? emptyIdx : 0;
+        const assignedNumber = this.getPlayerNumber(player);
 
         this.myLineup[targetIdx] = {
           order: targetIdx + 1,
           playerId: player.id,
-          number: player.number,
+          number: assignedNumber,
           name: player.name,
           pos: player.pos
         };
@@ -450,15 +480,21 @@ export class RosterViewComponent {
     const btnAdd = this.container.querySelector("#btn-open-add-player");
     if (btnAdd) {
       btnAdd.addEventListener("click", () => {
-        const numStr = prompt("背番号を入力してください (例: 10):");
-        if (!numStr) return;
+        const offNumStr = prompt("【公式戦用】背番号を入力してください (例: 10):");
+        if (!offNumStr) return;
+        const pracNumStr = prompt("【練習試合用】背番号を入力してください (空欄の場合は公式戦と同じになります):", offNumStr);
         const nameStr = prompt("選手氏名を入力してください (例: 高橋 翔太):");
         if (!nameStr) return;
         const posStr = prompt("守備位置 (例: 投, 捕, 一, 外):", "投") || "投";
 
+        const offNum = parseInt(offNumStr, 10) || 99;
+        const pracNum = pracNumStr ? (parseInt(pracNumStr, 10) || offNum) : offNum;
+
         this.roster.push({
           id: `p_${Date.now()}`,
-          number: parseInt(numStr, 10) || 99,
+          number: this.matchType === "official" ? offNum : pracNum,
+          officialNumber: offNum,
+          practiceNumber: pracNum,
           name: nameStr.trim(),
           grade: 6,
           throws: "右",
@@ -475,7 +511,7 @@ export class RosterViewComponent {
     const btnBatch = this.container.querySelector("#btn-open-batch-import");
     if (btnBatch) {
       btnBatch.addEventListener("click", () => {
-        const text = prompt("テキストを貼り付けてください:\n例:\n1, 山田 太郎, 6, 投\n2, 佐藤 健一, 6, 捕");
+        const text = prompt("テキストを貼り付けてください:\n形式1 (公式, 練習, 氏名, 学年, 守備):\n10, 1, 山田 太郎, 6, 投\n\n形式2 (従来の単一番号):\n1, 山田 太郎, 6, 投");
         if (!text) return;
         this.importBatchText(text);
       });
@@ -590,17 +626,24 @@ export class RosterViewComponent {
   }
 
   openPlayerSelectPrompt(orderIdx) {
-    const listStr = this.roster.map((p, idx) => `${idx + 1}: #${p.number} ${p.name} (${p.pos})`).join("\n");
+    const listStr = this.roster
+      .map((p, idx) => {
+        const num = this.getPlayerNumber(p);
+        return `${idx + 1}: #${num} ${p.name} (${p.pos})`;
+      })
+      .join("\n");
+
     const selectIdx = prompt(`【${orderIdx + 1}番打者】割り当てる番号を入力してください:\n${listStr}`);
     if (!selectIdx) return;
 
     const idx = parseInt(selectIdx, 10) - 1;
     const player = this.roster[idx];
     if (player) {
+      const assignedNum = this.getPlayerNumber(player);
       this.myLineup[orderIdx] = {
         order: orderIdx + 1,
         playerId: player.id,
-        number: player.number,
+        number: assignedNum,
         name: player.name,
         pos: player.pos
       };
@@ -616,22 +659,49 @@ export class RosterViewComponent {
     lines.forEach((line) => {
       const parts = line.split(/[,、\s\t]+/).filter(Boolean);
       if (parts.length >= 2) {
-        const num = parseInt(parts[0], 10);
-        const name = parts[1];
-        const grade = parts[2] ? parseInt(parts[2], 10) || 6 : 6;
-        const pos = parts[3] || "投";
+        // パターンA: 5項目以上で1項目め・2項目めが両方数値の場合 (公式, 練習, 氏名, 学年, 守備)
+        if (parts.length >= 3 && !isNaN(parseInt(parts[0], 10)) && !isNaN(parseInt(parts[1], 10))) {
+          const offNum = parseInt(parts[0], 10);
+          const pracNum = parseInt(parts[1], 10);
+          const name = parts[2];
+          const grade = parts[3] ? parseInt(parts[3], 10) || 6 : 6;
+          const pos = parts[4] || "投";
 
-        if (!isNaN(num) && name) {
-          this.roster.push({
-            id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-            number: num,
-            name: name,
-            grade: grade,
-            throws: "右",
-            bats: "右",
-            pos: pos
-          });
-          count++;
+          if (name) {
+            this.roster.push({
+              id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+              number: this.matchType === "official" ? offNum : pracNum,
+              officialNumber: offNum,
+              practiceNumber: pracNum,
+              name: name,
+              grade: grade,
+              throws: "右",
+              bats: "右",
+              pos: pos
+            });
+            count++;
+          }
+        } else {
+          // パターンB: 従来の単一背番号形式 (番号, 氏名, 学年, 守備)
+          const num = parseInt(parts[0], 10);
+          const name = parts[1];
+          const grade = parts[2] ? parseInt(parts[2], 10) || 6 : 6;
+          const pos = parts[3] || "投";
+
+          if (!isNaN(num) && name) {
+            this.roster.push({
+              id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+              number: num,
+              officialNumber: num,
+              practiceNumber: num,
+              name: name,
+              grade: grade,
+              throws: "右",
+              bats: "右",
+              pos: pos
+            });
+            count++;
+          }
         }
       }
     });
@@ -641,6 +711,32 @@ export class RosterViewComponent {
       this.render();
       this.bindEvents();
     }
+  }
+
+  /**
+   * 現在のモード (official / practice) に応じた背番号を取得
+   */
+  getPlayerNumber(player) {
+    if (!player) return 0;
+    if (this.matchType === "practice") {
+      return player.practiceNumber ?? player.number ?? 0;
+    }
+    return player.officialNumber ?? player.number ?? 0;
+  }
+
+  /**
+   * 現在選択中の背番号モードに合わせて、自チームオーダーの背番号を一括更新
+   */
+  syncLineupNumbersWithCurrentMode() {
+    this.myLineup.forEach((slot) => {
+      if (slot && slot.playerId) {
+        const p = this.roster.find((r) => r.id === slot.playerId);
+        if (p) {
+          slot.number = this.getPlayerNumber(p);
+        }
+      }
+    });
+    this.saveLineup("my", this.myLineup);
   }
 
   /**
@@ -712,8 +808,8 @@ export class RosterViewComponent {
 
   generateDefaultLineup() {
     return [
-      { order: 1, playerId: "p1", number: 1, name: "山田 太郎", pos: "投" },
-      { order: 2, playerId: "p2", number: 2, name: "佐藤 健一", pos: "捕" },
+      { order: 1, playerId: "p1", number: this.matchType === "official" ? 10 : 1, name: "山田 太郎", pos: "投" },
+      { order: 2, playerId: "p2", number: this.matchType === "official" ? 1 : 2, name: "佐藤 健一", pos: "捕" },
       { order: 3, playerId: "p6", number: 6, name: "小林 隼人", pos: "遊" },
       { order: 4, playerId: "p3", number: 3, name: "田中 拓海", pos: "一" },
       { order: 5, playerId: "p5", number: 5, name: "中村 蓮", pos: "三" },
@@ -744,9 +840,31 @@ export class RosterViewComponent {
   loadRoster() {
     try {
       const data = localStorage.getItem("gakudo_roster_master");
-      return data ? JSON.parse(data) : DEFAULT_ROSTER;
+      const list = data ? JSON.parse(data) : DEFAULT_ROSTER;
+      // 既存データの後方互換補正
+      return list.map((p) => ({
+        ...p,
+        officialNumber: p.officialNumber ?? p.number ?? 99,
+        practiceNumber: p.practiceNumber ?? p.number ?? 99
+      }));
     } catch (e) {
       return DEFAULT_ROSTER;
+    }
+  }
+
+  saveMatchType(type) {
+    try {
+      localStorage.setItem("gakudo_match_type", type);
+    } catch (e) {
+      console.warn("試合種別保存失敗", e);
+    }
+  }
+
+  loadMatchType() {
+    try {
+      return localStorage.getItem("gakudo_match_type") || "official";
+    } catch (e) {
+      return "official";
     }
   }
 
