@@ -581,6 +581,12 @@ export class RosterViewComponent {
     const lineup = this.targetTeam === "my" ? this.myLineup : this.oppLineup;
     if (!lineup[fromIndex] || !lineup[toIndex]) return;
 
+    // スクロール位置の退避（モーダル全体 ＆ 打順リストコンテナ）
+    const modalScrollEl = this.container.querySelector(".overflow-y-auto");
+    const modalScrollTop = modalScrollEl ? modalScrollEl.scrollTop : 0;
+    const slotsScrollEl = this.container.querySelector("#lineup-slots-container");
+    const slotsScrollTop = slotsScrollEl ? slotsScrollEl.scrollTop : 0;
+
     // 指定位置から要素を取り出し、移動先へ挿入
     const [movedItem] = lineup.splice(fromIndex, 1);
     lineup.splice(toIndex, 0, movedItem);
@@ -593,6 +599,16 @@ export class RosterViewComponent {
     this.saveLineup(this.targetTeam, lineup);
     this.render();
     this.bindEvents();
+
+    // 再描画直後にスクロール位置を完全に復元（PCでの上部への跳ね上がりを防止）
+    const newModalScrollEl = this.container.querySelector(".overflow-y-auto");
+    if (newModalScrollEl) {
+      newModalScrollEl.scrollTop = modalScrollTop;
+    }
+    const newSlotsScrollEl = this.container.querySelector("#lineup-slots-container");
+    if (newSlotsScrollEl) {
+      newSlotsScrollEl.scrollTop = slotsScrollTop;
+    }
   }
 
   bindRosterEvents() {
