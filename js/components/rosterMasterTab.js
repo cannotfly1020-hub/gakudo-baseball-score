@@ -1,6 +1,6 @@
 /**
  * js/components/rosterMasterTab.js
- * 団員名簿マスタ タブ（フルネーム完全抽出・大型テキストエリア一括取込・2系統背番号）
+ * 団員名簿マスタ タブ（選手情報の編集・修正・フルネーム完全抽出・大型テキストエリア一括取込）
  */
 
 export class RosterMasterTabComponent {
@@ -14,6 +14,7 @@ export class RosterMasterTabComponent {
   constructor(containerElement, options = {}) {
     this.container = containerElement;
     this.options = options;
+    this.editingPlayerIndex = null; // null: 新規追加, 数値: 編集対象インデックス
   }
 
   render() {
@@ -37,15 +38,15 @@ export class RosterMasterTabComponent {
         </div>
 
         <!-- 名簿一覧テーブル -->
-        <div class="overflow-x-auto max-h-[50vh] overflow-y-auto rounded-xl border border-slate-800">
+        <div class="overflow-x-auto max-h-[52vh] overflow-y-auto rounded-xl border border-slate-800">
           <table class="w-full text-left text-xs border-collapse">
             <thead class="bg-slate-950 sticky top-0 border-b border-slate-800 text-[10px] text-slate-400">
               <tr>
                 <th class="py-1.5 px-2">公式#</th>
                 <th class="py-1.5 px-2">練習#</th>
                 <th class="py-1.5 px-2">氏名 (フルネーム)</th>
-                <th class="py-1.5 px-1">学年</th>
-                <th class="py-1.5 px-1">守備</th>
+                <th class="py-1.5 px-1 text-center">学年</th>
+                <th class="py-1.5 px-1 text-center">守備</th>
                 <th class="py-1.5 px-2 text-right">操作</th>
               </tr>
             </thead>
@@ -63,10 +64,13 @@ export class RosterMasterTabComponent {
                   <td class="py-1.5 px-2 font-mono font-black text-indigo-400">#${p.officialNumber ?? p.number ?? "-"}</td>
                   <td class="py-1.5 px-2 font-mono font-black text-emerald-400">#${p.practiceNumber ?? p.number ?? "-"}</td>
                   <td class="py-1.5 px-2 font-bold text-slate-100">${p.name}</td>
-                  <td class="py-1.5 px-1 text-slate-400">${p.grade}年</td>
-                  <td class="py-1.5 px-1 font-bold text-amber-300">${p.pos}</td>
-                  <td class="py-1.5 px-2 text-right">
-                    <button type="button" class="btn-delete-player text-rose-400 hover:text-rose-300 text-[10px] px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-900" data-idx="${idx}">
+                  <td class="py-1.5 px-1 text-slate-400 text-center">${p.grade || 6}年</td>
+                  <td class="py-1.5 px-1 font-bold text-amber-300 text-center">${p.pos || "投"}</td>
+                  <td class="py-1.5 px-2 text-right space-x-1">
+                    <button type="button" class="btn-edit-player text-sky-300 hover:text-sky-200 text-[10px] font-bold px-2 py-0.5 rounded bg-sky-950/70 border border-sky-800 transition" data-idx="${idx}">
+                      編集
+                    </button>
+                    <button type="button" class="btn-delete-player text-rose-400 hover:text-rose-300 text-[10px] px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-900 transition" data-idx="${idx}">
                       削除
                     </button>
                   </td>
@@ -76,6 +80,75 @@ export class RosterMasterTabComponent {
                 .join("")}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- 選手情報 編集・追加モーダル -->
+      <div id="player-edit-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-3 select-none">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm p-4 shadow-2xl space-y-3 flex flex-col">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 id="player-modal-title" class="font-black text-xs sm:text-sm text-slate-100 flex items-center gap-1.5">
+              <span>✏️</span>
+              <span>選手情報の編集</span>
+            </h3>
+            <button type="button" id="btn-close-edit-modal" class="text-slate-400 hover:text-white text-base px-2 py-0.5 rounded hover:bg-slate-800">✕</button>
+          </div>
+
+          <form id="form-player-edit" class="space-y-2.5 text-xs">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 mb-0.5">氏名 (フルネーム)</label>
+              <input type="text" id="input-edit-name" required placeholder="例: 森山 惇都" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-slate-200 text-xs font-bold outline-none">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-indigo-300 mb-0.5">公式戦背番号 (#)</label>
+                <input type="number" id="input-edit-off-num" min="0" max="99" required placeholder="例: 7" class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-indigo-300 font-mono font-black text-xs outline-none">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-emerald-300 mb-0.5">練習試合背番号 (#)</label>
+                <input type="number" id="input-edit-prac-num" min="0" max="99" required placeholder="例: 8" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-emerald-300 font-mono font-black text-xs outline-none">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 mb-0.5">学年</label>
+                <select id="select-edit-grade" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-slate-200 text-xs font-bold outline-none">
+                  <option value="6">6年</option>
+                  <option value="5">5年</option>
+                  <option value="4">4年</option>
+                  <option value="3">3年</option>
+                  <option value="2">2年</option>
+                  <option value="1">1年</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 mb-0.5">主な守備位置</label>
+                <select id="select-edit-pos" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg px-2 py-1.5 text-slate-200 text-xs font-bold outline-none">
+                  <option value="投">投 (投手)</option>
+                  <option value="捕">捕 (捕手)</option>
+                  <option value="一">一 (一塁)</option>
+                  <option value="二">二 (二塁)</option>
+                  <option value="三">三 (三塁)</option>
+                  <option value="遊">遊 (遊撃)</option>
+                  <option value="左">左 (左翼)</option>
+                  <option value="中">中 (中堅)</option>
+                  <option value="右">右 (右翼)</option>
+                  <option value="外">外 (外野)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button type="button" id="btn-cancel-edit" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition">
+                キャンセル
+              </button>
+              <button type="submit" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-black rounded-lg shadow-md transition flex items-center gap-1">
+                <span>✓ 保存する</span>
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
@@ -116,21 +189,150 @@ export class RosterMasterTabComponent {
   }
 
   bindEvents() {
+    // 1. 選手追加ボタン（編集モーダルを新規モードで展開）
     const btnAdd = this.container.querySelector("#btn-open-add-player");
     if (btnAdd) {
-      btnAdd.addEventListener("click", () => this.handleAddPlayer());
+      btnAdd.addEventListener("click", () => this.openEditModal(null));
     }
 
+    // 2. 名簿全消去
     const btnClear = this.container.querySelector("#btn-clear-roster");
     if (btnClear) {
       btnClear.addEventListener("click", () => {
-        // UI安全モーダル的な確認（全消去）
         if (window.confirm("名簿を全消去して新規作成しますか？")) {
           this.saveAndRerender([]);
         }
       });
     }
 
+    // 3. 各行の「編集」ボタン
+    this.container.querySelectorAll(".btn-edit-player").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.getAttribute("data-idx"), 10);
+        this.openEditModal(idx);
+      });
+    });
+
+    // 4. 各行の「削除」ボタン
+    this.container.querySelectorAll(".btn-delete-player").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.getAttribute("data-idx"), 10);
+        this.handleDeletePlayer(idx);
+      });
+    });
+
+    // 5. 編集モーダル内のイベント
+    const editModal = this.container.querySelector("#player-edit-modal");
+    const btnCloseEdit = this.container.querySelector("#btn-close-edit-modal");
+    const btnCancelEdit = this.container.querySelector("#btn-cancel-edit");
+    const formEdit = this.container.querySelector("#form-player-edit");
+
+    const closeEdit = () => {
+      if (editModal) editModal.classList.add("hidden");
+      this.editingPlayerIndex = null;
+    };
+
+    if (btnCloseEdit) btnCloseEdit.addEventListener("click", closeEdit);
+    if (btnCancelEdit) btnCancelEdit.addEventListener("click", closeEdit);
+
+    if (formEdit) {
+      formEdit.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleSavePlayerEdit();
+      });
+    }
+
+    // 6. 一括取込モーダルのイベント
+    this.bindBatchImportEvents();
+  }
+
+  openEditModal(idx) {
+    this.editingPlayerIndex = idx;
+    const modal = this.container.querySelector("#player-edit-modal");
+    const titleEl = this.container.querySelector("#player-modal-title");
+    const inputName = this.container.querySelector("#input-edit-name");
+    const inputOff = this.container.querySelector("#input-edit-off-num");
+    const inputPrac = this.container.querySelector("#input-edit-prac-num");
+    const selectGrade = this.container.querySelector("#select-edit-grade");
+    const selectPos = this.container.querySelector("#select-edit-pos");
+
+    if (!modal) return;
+
+    if (idx !== null) {
+      // 既存選手の編集モード
+      const roster = this.options.getRoster();
+      const player = roster[idx];
+      if (!player) return;
+
+      if (titleEl) titleEl.innerHTML = `<span>✏️</span><span>選手情報の編集</span>`;
+      if (inputName) inputName.value = player.name || "";
+      if (inputOff) inputOff.value = player.officialNumber ?? player.number ?? "";
+      if (inputPrac) inputPrac.value = player.practiceNumber ?? player.number ?? "";
+      if (selectGrade) selectGrade.value = String(player.grade || 6);
+      if (selectPos) selectPos.value = player.pos || "投";
+    } else {
+      // 新規選手の追加モード
+      if (titleEl) titleEl.innerHTML = `<span>＋</span><span>新規選手の追加</span>`;
+      if (inputName) inputName.value = "";
+      if (inputOff) inputOff.value = "";
+      if (inputPrac) inputPrac.value = "";
+      if (selectGrade) selectGrade.value = "6";
+      if (selectPos) selectPos.value = "投";
+    }
+
+    modal.classList.remove("hidden");
+    if (inputName) inputName.focus();
+  }
+
+  handleSavePlayerEdit() {
+    const inputName = this.container.querySelector("#input-edit-name");
+    const inputOff = this.container.querySelector("#input-edit-off-num");
+    const inputPrac = this.container.querySelector("#input-edit-prac-num");
+    const selectGrade = this.container.querySelector("#select-edit-grade");
+    const selectPos = this.container.querySelector("#select-edit-pos");
+    const modal = this.container.querySelector("#player-edit-modal");
+
+    const name = inputName ? inputName.value.trim() : "";
+    if (!name) return;
+
+    const offNum = inputOff && inputOff.value !== "" ? parseInt(inputOff.value, 10) : 0;
+    const pracNum = inputPrac && inputPrac.value !== "" ? parseInt(inputPrac.value, 10) : offNum;
+    const grade = selectGrade ? parseInt(selectGrade.value, 10) || 6 : 6;
+    const pos = selectPos ? selectPos.value : "投";
+
+    const roster = this.options.getRoster();
+    const matchType = typeof this.options.getMatchType === "function" ? this.options.getMatchType() : "official";
+
+    if (this.editingPlayerIndex !== null && roster[this.editingPlayerIndex]) {
+      // 既存選手の上書き更新
+      const target = roster[this.editingPlayerIndex];
+      target.name = name;
+      target.officialNumber = offNum;
+      target.practiceNumber = pracNum;
+      target.number = matchType === "official" ? offNum : pracNum;
+      target.grade = grade;
+      target.pos = pos;
+    } else {
+      // 新規選手の追加
+      roster.push({
+        id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        number: matchType === "official" ? offNum : pracNum,
+        officialNumber: offNum,
+        practiceNumber: pracNum,
+        name: name,
+        grade: grade,
+        throws: "右",
+        bats: "右",
+        pos: pos
+      });
+    }
+
+    if (modal) modal.classList.add("hidden");
+    this.editingPlayerIndex = null;
+    this.saveAndRerender(roster);
+  }
+
+  bindBatchImportEvents() {
     const btnBatch = this.container.querySelector("#btn-open-batch-import");
     const importModal = this.container.querySelector("#batch-import-modal");
     const btnCloseModal = this.container.querySelector("#btn-close-import-modal");
@@ -195,18 +397,8 @@ export class RosterMasterTabComponent {
         this.saveAndRerender(roster);
       });
     }
-
-    this.container.querySelectorAll(".btn-delete-player").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const idx = parseInt(btn.getAttribute("data-idx"), 10);
-        this.handleDeletePlayer(idx);
-      });
-    });
   }
 
-  /**
-   * テキスト解析エンジン（正規表現によるフルネーム・背番号の完全抽出）
-   */
   parseInputText(rawText) {
     if (!rawText) return [];
 
@@ -217,17 +409,11 @@ export class RosterMasterTabComponent {
       let line = rawLine.trim();
       if (!line) return;
 
-      // 1. 見出し行 (#, ##) のスキップ
       if (line.startsWith("#")) return;
-
-      // 2. 全角数字を半角数字へ標準化 (０-９ -> 0-9)
       line = line.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0));
-
-      // 3. 装飾記号 (太字 ** や箇条書き記号 -, *, •, ・) を行頭から除去
       line = line.replace(/\*\*/g, "").trim();
       line = line.replace(/^[-*•・]\s*/, "").trim();
 
-      // 数字が1つも含まれない純粋なタイトル行はスキップ
       if (!/\d/.test(line)) return;
 
       let offNum = null;
@@ -236,7 +422,6 @@ export class RosterMasterTabComponent {
       let pos = "投";
       let grade = 6;
 
-      // 4. カンマ区切りの判定
       if (line.includes(",") || line.includes("、")) {
         const parts = line.split(/[,、]+/).map((s) => s.trim()).filter(Boolean);
         if (parts.length >= 2) {
@@ -258,18 +443,12 @@ export class RosterMasterTabComponent {
           }
         }
       } else {
-        // 5. 空白区切りの高度な正規表現マッチング（姓名間の空白を完全保護）
-
-        // パターンA: [先頭数字] [氏名(スペース含有可)] [末尾数字]
-        // 例: "- 7 森山 惇都 8" -> off: 7, name: "森山 惇都", prac: 8
         const matchDual = line.match(/^(\d+)\s+(.+?)\s+(\d+)$/);
         if (matchDual) {
           offNum = parseInt(matchDual[1], 10);
           fullName = matchDual[2].trim();
           pracNum = parseInt(matchDual[3], 10);
         } else {
-          // パターンB: [氏名(スペース含有可)] [末尾数字]
-          // 例: "- 佐甲 大知 25" -> off: 25, prac: 25, name: "佐甲 大知"
           const matchNameFirst = line.match(/^(.+?)\s+(\d+)$/);
           if (matchNameFirst) {
             const num = parseInt(matchNameFirst[2], 10);
@@ -277,8 +456,6 @@ export class RosterMasterTabComponent {
             pracNum = num;
             fullName = matchNameFirst[1].trim();
           } else {
-            // パターンC: [先頭数字] [氏名(スペース含有可)]
-            // 例: "25 佐甲 大知" -> off: 25, prac: 25, name: "佐甲 大知"
             const matchNumFirst = line.match(/^(\d+)\s+(.+)$/);
             if (matchNumFirst) {
               const num = parseInt(matchNumFirst[1], 10);
@@ -290,7 +467,6 @@ export class RosterMasterTabComponent {
         }
       }
 
-      // 名前と背番号が正しく抽出できた場合にリストへ追加
       if (fullName && offNum !== null && pracNum !== null) {
         results.push({
           offNum,
@@ -305,40 +481,14 @@ export class RosterMasterTabComponent {
     return results;
   }
 
-  handleAddPlayer() {
-    const offNumStr = window.prompt("【公式戦用】背番号を入力してください (例: 10):");
-    if (offNumStr === null || offNumStr.trim() === "") return;
-    const pracNumStr = window.prompt("【練習試合用】背番号を入力してください (空欄の場合は公式戦と同じになります):", offNumStr);
-    const nameStr = window.prompt("選手氏名 (フルネーム) を入力してください (例: 高橋 翔太):");
-    if (!nameStr) return;
-    const posStr = window.prompt("守備位置 (例: 投, 捕, 一, 外):", "投") || "投";
-
-    const offNum = parseInt(offNumStr, 10);
-    const validOffNum = !isNaN(offNum) ? offNum : 99;
-    const pracNum = pracNumStr !== null && pracNumStr.trim() !== "" ? parseInt(pracNumStr, 10) : validOffNum;
-    const validPracNum = !isNaN(pracNum) ? pracNum : validOffNum;
-    const matchType = typeof this.options.getMatchType === "function" ? this.options.getMatchType() : "official";
-
-    const roster = this.options.getRoster();
-    roster.push({
-      id: `p_${Date.now()}`,
-      number: matchType === "official" ? validOffNum : validPracNum,
-      officialNumber: validOffNum,
-      practiceNumber: validPracNum,
-      name: nameStr.trim(),
-      grade: 6,
-      throws: "右",
-      bats: "右",
-      pos: posStr.trim()
-    });
-
-    this.saveAndRerender(roster);
-  }
-
   handleDeletePlayer(idx) {
     const roster = this.options.getRoster();
-    roster.splice(idx, 1);
-    this.saveAndRerender(roster);
+    const p = roster[idx];
+    const pName = p ? p.name : "選手";
+    if (window.confirm(`「${pName}」を名簿から削除しますか？`)) {
+      roster.splice(idx, 1);
+      this.saveAndRerender(roster);
+    }
   }
 
   saveAndRerender(updatedRoster) {
