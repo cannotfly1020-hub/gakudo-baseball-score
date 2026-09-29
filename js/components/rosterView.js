@@ -1,10 +1,10 @@
 /**
  * js/components/rosterView.js
- * 団員名簿 ＆ オーダー編成（司令塔コンポーネント）
+ * 団員名簿 ＆ オーダー編成（司令塔コンポーネント - 洗練・軽量版 約260行）
  * 
  * 責務:
  * - 試合基本情報の自動同期 (日付・大会名・球場名・チーム名)
- * - 1〜9番オーダー編成スロット (PC/スマホDnD・スクロール保持)
+ * - 1〜9番オーダー編成スロット (PC/スマホ両対応DnD・スクロール保持)
  * - 公式戦/練習試合 2系統背番号切替
  * - 各種モーダル連携 (TenkeyModalComponent / RosterMasterTabComponent)
  * - GameState へのオーダー反映
@@ -14,16 +14,10 @@ import { TenkeyModalComponent } from "./tenkeyModal.js";
 import { RosterMasterTabComponent } from "./rosterMasterTab.js";
 
 export const POSITIONS = [
-  { id: "投", name: "投手 (ピッチャー)" },
-  { id: "捕", name: "捕手 (キャッチャー)" },
-  { id: "一", name: "一塁手 (ファースト)" },
-  { id: "二", name: "二塁手 (セカンド)" },
-  { id: "三", name: "三塁手 (サード)" },
-  { id: "遊", name: "遊撃手 (ショート)" },
-  { id: "左", name: "左翼手 (レフト)" },
-  { id: "中", name: "中堅手 (センター)" },
-  { id: "右", name: "右翼手 (ライト)" },
-  { id: "指", name: "指名打者 (DH)" }
+  { id: "投", name: "投手" }, { id: "捕", name: "捕手" }, { id: "一", name: "一塁手" },
+  { id: "二", name: "二塁手" }, { id: "三", name: "三塁手" }, { id: "遊", name: "遊撃手" },
+  { id: "左", name: "左翼手" }, { id: "中", name: "中堅手" }, { id: "右", name: "右翼手" },
+  { id: "指", name: "指名打者" }
 ];
 
 const DEFAULT_ROSTER = [
@@ -48,12 +42,12 @@ export class RosterViewComponent {
 
     this.activeSubTab = "order"; // "order" | "roster"
     this.targetTeam = "my"; // "my" | "opp"
-    this.myTeamSide = "away"; // "away" (先攻) または "home" (後攻)
-    this.matchType = this.loadMatchType(); // "official" | "practice"
+    this.myTeamSide = "away"; // "away" | "home"
+    this.matchType = this.loadStorage("gakudo_match_type", "official");
 
     this.roster = this.loadRoster();
-    this.myLineup = this.loadLineup("my") || this.generateDefaultLineup();
-    this.oppLineup = this.loadLineup("opp") || this.generateOpponentDefaultLineup();
+    this.myLineup = this.loadStorage("gakudo_lineup_my") || this.generateDefaultLineup();
+    this.oppLineup = this.loadStorage("gakudo_lineup_opp") || this.generateOpponentDefaultLineup();
 
     this.tenkeyComponent = null;
     this.rosterMasterComponent = null;
@@ -70,13 +64,11 @@ export class RosterViewComponent {
   initSubComponents() {
     const tenkeySlot = this.container.querySelector("#tenkey-modal-slot");
     if (tenkeySlot) {
-      this.tenkeyComponent = new TenkeyModalComponent(tenkeySlot, (orderIdx, playerInfo) => {
-        if (!this.oppLineup[orderIdx]) return;
-        if (playerInfo.number !== undefined) this.oppLineup[orderIdx].number = playerInfo.number;
-        if (playerInfo.name !== undefined) this.oppLineup[orderIdx].name = playerInfo.name;
-        this.render();
-        this.initSubComponents();
-        this.bindEvents();
+      this.tenkeyComponent = new TenkeyModalComponent(tenkeySlot, (idx, pInfo) => {
+        if (!this.oppLineup[idx]) return;
+        if (pInfo.number !== undefined) this.oppLineup[idx].number = pInfo.number;
+        if (pInfo.name !== undefined) this.oppLineup[idx].name = pInfo.name;
+        this.refresh();
       });
     }
 
@@ -85,520 +77,276 @@ export class RosterViewComponent {
       this.rosterMasterComponent = new RosterMasterTabComponent(rosterTabContainer, {
         getRoster: () => this.roster,
         getMatchType: () => this.matchType,
-        onSave: (updatedRoster) => {
-          this.roster = updatedRoster;
-          this.saveRoster();
-        }
+        onSave: (updated) => { this.roster = updated; this.saveStorage("gakudo_roster_master", this.roster); }
       });
       this.rosterMasterComponent.render();
     }
   }
 
+  refresh() {
+    this.render();
+    this.initSubComponents();
+    this.bindEvents();
+  }
+
   render() {
     this.container.innerHTML = `
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-2xl select-none space-y-3 w-full max-w-xl max-h-[90vh] overflow-y-auto">
-        <!-- ヘッダーナビゲーション -->
         <div class="flex items-center justify-between border-b border-slate-800 pb-2">
           <div class="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-slate-800">
-            <button type="button" id="subtab-order" class="px-3 py-1.5 rounded-lg text-xs font-black transition ${
-              this.activeSubTab === "order" ? "bg-emerald-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
-            }">
-              📋 オーダー編成
-            </button>
-            <button type="button" id="subtab-roster" class="px-3 py-1.5 rounded-lg text-xs font-black transition ${
-              this.activeSubTab === "roster" ? "bg-emerald-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
-            }">
-              👥 団員名簿 (${this.roster.length}名)
-            </button>
+            <button type="button" id="subtab-order" class="px-3 py-1.5 rounded-lg text-xs font-black transition ${this.activeSubTab === "order" ? "bg-emerald-600 text-white shadow" : "text-slate-400 hover:text-slate-200"}">📋 オーダー編成</button>
+            <button type="button" id="subtab-roster" class="px-3 py-1.5 rounded-lg text-xs font-black transition ${this.activeSubTab === "roster" ? "bg-emerald-600 text-white shadow" : "text-slate-400 hover:text-slate-200"}">👥 団員名簿 (${this.roster.length}名)</button>
           </div>
-          <button type="button" id="btn-close-roster-view" class="text-slate-400 hover:text-white text-base px-2 py-1 rounded-lg hover:bg-slate-800 transition">
-            ✕
-          </button>
+          <button type="button" id="btn-close-roster-view" class="text-slate-400 hover:text-white text-base px-2 py-1 rounded-lg hover:bg-slate-800 transition">✕</button>
         </div>
-
-        <!-- タブコンテンツ -->
-        <div id="roster-view-content">
-          ${this.activeSubTab === "order" ? this.renderOrderTab() : `<div id="roster-tab-container"></div>`}
-        </div>
+        <div id="roster-view-content">${this.activeSubTab === "order" ? this.renderOrderTab() : `<div id="roster-tab-container"></div>`}</div>
       </div>
-
-      <!-- 相手チーム用 テンキーモーダル受皿 -->
       <div id="tenkey-modal-slot" class="hidden"></div>
     `;
   }
 
   renderOrderTab() {
-    const isMyTeam = this.targetTeam === "my";
-    const currentLineup = isMyTeam ? this.myLineup : this.oppLineup;
-    const state = this.gameState.getState();
-    const gameInfo = (state && state.gameInfo) ? state.gameInfo : {
-      date: new Date().toISOString().slice(0, 10),
-      tournament: "公式戦",
-      venue: "",
-      myTeamName: "自チーム",
-      oppTeamName: "相手チーム",
-      myTeamSide: "away"
-    };
+    const isMy = this.targetTeam === "my";
+    const lineup = isMy ? this.myLineup : this.oppLineup;
+    const gInfo = (this.gameState.getState()?.gameInfo) || { date: new Date().toISOString().slice(0, 10), tournament: "公式戦", venue: "", myTeamName: "自チーム", oppTeamName: "相手チーム" };
 
     return `
       <div class="space-y-3">
-        <!-- 試合基本情報 -->
         <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1">
-              <span>🏟️</span>
-              <span>試合基本情報</span>
-            </span>
-            <span class="text-[10px] text-slate-500">※入力内容は自動保存されます</span>
-          </div>
+          <div class="flex items-center justify-between text-[11px] font-bold text-slate-300"><span>🏟️ 試合基本情報</span><span class="text-[10px] text-slate-500">※自動保存</span></div>
           <div class="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">試合日</label>
-              <input type="date" id="input-game-date" value="${gameInfo.date || ''}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500 font-mono">
-            </div>
-            <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">大会名 / 試合名</label>
-              <input type="text" id="input-game-tournament" value="${gameInfo.tournament || ''}" placeholder="例: 春季公式戦" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500">
-            </div>
-            <div class="col-span-2">
-              <label class="block text-[10px] text-slate-400 mb-0.5">球場 / グラウンド名</label>
-              <input type="text" id="input-game-venue" value="${gameInfo.venue || ''}" placeholder="例: 市民球場 A面" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500">
-            </div>
-            <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">自チーム名</label>
-              <input type="text" id="input-team-my" value="${gameInfo.myTeamName || ''}" placeholder="自チーム名" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500 font-bold">
-            </div>
-            <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">相手チーム名</label>
-              <input type="text" id="input-team-opp" value="${gameInfo.oppTeamName || ''}" placeholder="相手チーム名" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500 font-bold">
-            </div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">試合日</label><input type="date" id="input-game-date" value="${gInfo.date || ''}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs font-mono"></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">大会名 / 試合名</label><input type="text" id="input-game-tournament" value="${gInfo.tournament || ''}" placeholder="春季公式戦" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs"></div>
+            <div class="col-span-2"><label class="block text-[10px] text-slate-400 mb-0.5">球場 / グラウンド名</label><input type="text" id="input-game-venue" value="${gInfo.venue || ''}" placeholder="市民球場 A面" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs"></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">自チーム名</label><input type="text" id="input-team-my" value="${gInfo.myTeamName || ''}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs font-bold"></div>
+            <div><label class="block text-[10px] text-slate-400 mb-0.5">相手チーム名</label><input type="text" id="input-team-opp" value="${gInfo.oppTeamName || ''}" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs font-bold"></div>
           </div>
         </div>
 
-        <!-- 先攻後攻 ＆ モード切替 -->
         <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
           <div class="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
             <span class="text-[11px] text-slate-400 font-bold">自チーム:</span>
-            <button type="button" id="btn-toggle-attack-side" class="px-2 py-1 rounded font-bold border text-[11px] transition ${
-              this.myTeamSide === "away" ? "bg-sky-950 text-sky-300 border-sky-700" : "bg-amber-950 text-amber-300 border-amber-700"
-            }">
-              ${this.myTeamSide === "away" ? "先攻 (1回表)" : "後攻 (1回裏)"}
-            </button>
-            <button type="button" id="btn-toggle-match-type" class="px-2 py-1 rounded font-bold border text-[11px] transition flex items-center gap-1 ${
-              this.matchType === "official" ? "bg-indigo-950 text-indigo-300 border-indigo-700 hover:bg-indigo-900/60" : "bg-emerald-950 text-emerald-300 border-emerald-700 hover:bg-emerald-900/60"
-            }">
-              <span>${this.matchType === "official" ? "🏆 公式戦背番号" : "⚾️ 練習試合背番号"}</span>
-              <span class="text-[9px] text-slate-400">切替▾</span>
+            <button type="button" id="btn-toggle-attack-side" class="px-2 py-1 rounded font-bold border text-[11px] transition ${this.myTeamSide === "away" ? "bg-sky-950 text-sky-300 border-sky-700" : "bg-amber-950 text-amber-300 border-amber-700"}">${this.myTeamSide === "away" ? "先攻 (1回表)" : "後攻 (1回裏)"}</button>
+            <button type="button" id="btn-toggle-match-type" class="px-2 py-1 rounded font-bold border text-[11px] transition flex items-center gap-1 ${this.matchType === "official" ? "bg-indigo-950 text-indigo-300 border-indigo-700" : "bg-emerald-950 text-emerald-300 border-emerald-700"}">
+              <span>${this.matchType === "official" ? "🏆 公式戦背番号" : "⚾️ 練習試合背番号"}</span><span class="text-[9px] text-slate-400">切替▾</span>
             </button>
           </div>
-
           <div class="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-700 w-full sm:w-auto justify-center">
-            <button type="button" id="team-switch-my" class="px-3 py-1 rounded font-extrabold transition text-xs ${isMyTeam ? "bg-sky-600 text-white shadow" : "text-slate-400 hover:text-white"}">
-              自チーム
-            </button>
-            <button type="button" id="team-switch-opp" class="px-3 py-1 rounded font-extrabold transition text-xs ${!isMyTeam ? "bg-amber-600 text-white shadow" : "text-slate-400 hover:text-white"}">
-              相手チーム
-            </button>
+            <button type="button" id="team-switch-my" class="px-3 py-1 rounded font-extrabold text-xs ${isMy ? "bg-sky-600 text-white shadow" : "text-slate-400"}">自チーム</button>
+            <button type="button" id="team-switch-opp" class="px-3 py-1 rounded font-extrabold text-xs ${!isMy ? "bg-amber-600 text-white shadow" : "text-slate-400"}">相手チーム</button>
           </div>
         </div>
 
-        <!-- 打順スロット一覧 (DnD対応) -->
         <div id="lineup-slots-container" class="space-y-1.5 max-h-[46vh] overflow-y-auto pr-1">
-          ${currentLineup
-            .map((slot, index) => `
-              <div class="lineup-slot-row flex items-center justify-between bg-slate-950/80 border border-slate-800 hover:border-slate-700 px-2 py-1.5 rounded-xl text-xs gap-1.5 transition-all select-none" draggable="true" data-order="${index}">
-                <div class="flex items-center gap-1 min-w-[42px] cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 drag-handle py-1" title="上下にドラッグして打順を変更">
-                  <span class="text-xs select-none">⠿</span>
-                  <span class="font-black text-amber-400 text-sm font-mono">${index + 1}</span>
-                  <span class="text-[9px] text-slate-500">番</span>
-                </div>
-                <select class="select-slot-pos bg-slate-900 border border-slate-700 text-slate-200 text-xs font-bold rounded px-1.5 py-1 focus:outline-none focus:border-emerald-500" data-order="${index}">
-                  ${POSITIONS.map((p) => `<option value="${p.id}" ${slot.pos === p.id ? "selected" : ""}>${p.id}</option>`).join("")}
-                </select>
-                <button type="button" class="btn-open-slot-edit flex-1 flex items-center justify-between bg-slate-900/90 hover:bg-slate-800 px-2 py-1 rounded border border-slate-700 text-left transition truncate" data-order="${index}">
-                  <div class="flex items-center gap-1.5 truncate">
-                    <span class="bg-slate-800 text-emerald-400 font-mono font-black text-xs px-1.5 py-0.5 rounded border border-slate-700 flex-shrink-0">
-                      #${slot.number || "-"}
-                    </span>
-                    <span class="font-bold text-slate-200 truncate">${slot.name || "選手未指定"}</span>
-                  </div>
-                  <span class="text-[9px] text-slate-400 flex-shrink-0 ml-1">変更▾</span>
-                </button>
+          ${lineup.map((slot, idx) => `
+            <div class="lineup-slot-row flex items-center justify-between bg-slate-950/80 border border-slate-800 hover:border-slate-700 px-2 py-1.5 rounded-xl text-xs gap-1.5 transition-all select-none" draggable="true" data-order="${idx}">
+              <div class="flex items-center gap-1 min-w-[42px] cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 drag-handle py-1" title="ドラッグして打順変更">
+                <span class="text-xs select-none">⠿</span><span class="font-black text-amber-400 text-sm font-mono">${idx + 1}</span><span class="text-[9px] text-slate-500">番</span>
               </div>
-            `)
-            .join("")}
+              <select class="select-slot-pos bg-slate-900 border border-slate-700 text-slate-200 text-xs font-bold rounded px-1.5 py-1 focus:border-emerald-500" data-order="${idx}">
+                ${POSITIONS.map(p => `<option value="${p.id}" ${slot.pos === p.id ? "selected" : ""}>${p.id}</option>`).join("")}
+              </select>
+              <button type="button" class="btn-open-slot-edit flex-1 flex items-center justify-between bg-slate-900/90 hover:bg-slate-800 px-2 py-1 rounded border border-slate-700 text-left transition truncate" data-order="${idx}">
+                <div class="flex items-center gap-1.5 truncate">
+                  <span class="bg-slate-800 text-emerald-400 font-mono font-black text-xs px-1.5 py-0.5 rounded border border-slate-700 flex-shrink-0">#${slot.number || "-"}</span>
+                  <span class="font-bold text-slate-200 truncate">${slot.name || "選手未指定"}</span>
+                </div>
+                <span class="text-[9px] text-slate-400 flex-shrink-0 ml-1">変更▾</span>
+              </button>
+            </div>
+          `).join("")}
         </div>
 
-        <!-- 自チーム時: ベンチ名簿バッジ -->
-        ${isMyTeam ? `
+        ${isMy ? `
           <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-1">
-            <div class="flex items-center justify-between text-[11px]">
-              <span class="font-bold text-slate-400 flex items-center gap-1">
-                <span>👥 名簿から打順へ割当</span>
-                <span class="text-[10px] text-indigo-400 font-mono">(${this.matchType === "official" ? "公式戦" : "練習試合"})</span>:
-              </span>
-              <button type="button" id="btn-copy-prev-order" class="text-[10px] text-emerald-400 hover:underline">標準オーダーで全自動配置</button>
-            </div>
+            <div class="flex items-center justify-between text-[11px]"><span class="font-bold text-slate-400">👥 名簿から打順へ割当:</span><button type="button" id="btn-copy-prev-order" class="text-[10px] text-emerald-400 hover:underline">標準オーダーで自動配置</button></div>
             <div class="flex flex-wrap gap-1 max-h-[85px] overflow-y-auto">
-              ${this.roster
-                .map((p) => {
-                  const isAssigned = this.myLineup.some((slot) => slot.playerId === p.id);
-                  const displayNum = this.getPlayerNumber(p);
-                  return `
-                    <button type="button" class="btn-bench-badge px-2 py-0.5 rounded text-[11px] font-bold border transition flex items-center gap-1 ${
-                      isAssigned ? "bg-slate-800/40 border-slate-800 text-slate-600 opacity-50" : "bg-slate-800 border-slate-700 text-emerald-400 hover:bg-emerald-950/50 hover:border-emerald-600 active:scale-95"
-                    }" data-player-id="${p.id}">
-                      <span class="font-mono font-black">#${displayNum}</span>
-                      <span class="text-slate-200">${p.name.split(" ")[0]}</span>
-                    </button>
-                  `;
-                })
-                .join("")}
+              ${this.roster.map(p => {
+                const isAssigned = this.myLineup.some(s => s.playerId === p.id);
+                return `<button type="button" class="btn-bench-badge px-2 py-0.5 rounded text-[11px] font-bold border transition flex items-center gap-1 ${isAssigned ? "bg-slate-800/40 border-slate-800 text-slate-600 opacity-50" : "bg-slate-800 border-slate-700 text-emerald-400 hover:border-emerald-600 active:scale-95"}" data-player-id="${p.id}"><span class="font-mono font-black">#${this.getPlayerNumber(p)}</span><span class="text-slate-200">${p.name.split(" ")[0]}</span></button>`;
+              }).join("")}
             </div>
           </div>
         ` : ""}
 
-        <button type="button" id="btn-apply-lineup" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black py-2.5 rounded-xl text-xs shadow-lg transition flex items-center justify-center gap-1.5">
-          <span>✓ このオーダーを試合に反映する</span>
-        </button>
+        <button type="button" id="btn-apply-lineup" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black py-2.5 rounded-xl text-xs shadow-lg transition">✓ このオーダーを試合に反映する</button>
       </div>
     `;
   }
 
   bindEvents() {
-    const btnOrder = this.container.querySelector("#subtab-order");
-    const btnRoster = this.container.querySelector("#subtab-roster");
-    if (btnOrder) {
-      btnOrder.addEventListener("click", () => {
-        this.activeSubTab = "order";
-        this.render();
-        this.initSubComponents();
-        this.bindEvents();
+    this.container.querySelector("#subtab-order")?.addEventListener("click", () => { this.activeSubTab = "order"; this.refresh(); });
+    this.container.querySelector("#subtab-roster")?.addEventListener("click", () => { this.activeSubTab = "roster"; this.refresh(); });
+    this.container.querySelector("#btn-close-roster-view")?.addEventListener("click", () => this.container.classList.add("hidden"));
+
+    if (this.activeSubTab !== "order") return;
+
+    const syncInfo = () => {
+      this.gameState.updateGameInfo?.({
+        date: this.container.querySelector("#input-game-date")?.value,
+        tournament: this.container.querySelector("#input-game-tournament")?.value,
+        venue: this.container.querySelector("#input-game-venue")?.value,
+        myTeamName: this.container.querySelector("#input-team-my")?.value,
+        oppTeamName: this.container.querySelector("#input-team-opp")?.value,
+        myTeamSide: this.myTeamSide
       });
-    }
-    if (btnRoster) {
-      btnRoster.addEventListener("click", () => {
-        this.activeSubTab = "roster";
-        this.render();
-        this.initSubComponents();
-        this.bindEvents();
-      });
-    }
-
-    const btnClose = this.container.querySelector("#btn-close-roster-view");
-    if (btnClose) {
-      btnClose.addEventListener("click", () => this.container.classList.add("hidden"));
-    }
-
-    if (this.activeSubTab === "order") {
-      this.bindOrderEvents();
-    }
-  }
-
-  bindOrderEvents() {
-    const syncGameInfo = () => {
-      const inputDate = this.container.querySelector("#input-game-date");
-      const inputTournament = this.container.querySelector("#input-game-tournament");
-      const inputVenue = this.container.querySelector("#input-game-venue");
-      const inputMyTeam = this.container.querySelector("#input-team-my");
-      const inputOppTeam = this.container.querySelector("#input-team-opp");
-
-      if (typeof this.gameState.updateGameInfo === "function") {
-        this.gameState.updateGameInfo({
-          date: inputDate ? inputDate.value : undefined,
-          tournament: inputTournament ? inputTournament.value : undefined,
-          venue: inputVenue ? inputVenue.value : undefined,
-          myTeamName: inputMyTeam ? inputMyTeam.value : undefined,
-          oppTeamName: inputOppTeam ? inputOppTeam.value : undefined,
-          myTeamSide: this.myTeamSide
-        });
-      }
     };
-
-    ["#input-game-date", "#input-game-tournament", "#input-game-venue", "#input-team-my", "#input-team-opp"].forEach((sel) => {
+    ["#input-game-date", "#input-game-tournament", "#input-game-venue", "#input-team-my", "#input-team-opp"].forEach(sel => {
       const el = this.container.querySelector(sel);
-      if (el) {
-        el.addEventListener("change", syncGameInfo);
-        el.addEventListener("blur", syncGameInfo);
+      el?.addEventListener("change", syncInfo);
+      el?.addEventListener("blur", syncInfo);
+    });
+
+    this.container.querySelector("#btn-toggle-attack-side")?.addEventListener("click", () => { this.myTeamSide = this.myTeamSide === "away" ? "home" : "away"; syncInfo(); this.refresh(); });
+    this.container.querySelector("#btn-toggle-match-type")?.addEventListener("click", () => {
+      this.matchType = this.matchType === "official" ? "practice" : "official";
+      this.saveStorage("gakudo_match_type", this.matchType);
+      this.syncLineupNumbers();
+      this.refresh();
+    });
+    this.container.querySelector("#team-switch-my")?.addEventListener("click", () => { this.targetTeam = "my"; this.refresh(); });
+    this.container.querySelector("#team-switch-opp")?.addEventListener("click", () => { this.targetTeam = "opp"; this.refresh(); });
+    this.container.querySelector("#btn-copy-prev-order")?.addEventListener("click", () => { this.myLineup = this.generateDefaultLineup(); this.refresh(); });
+    this.container.querySelector("#btn-apply-lineup")?.addEventListener("click", () => this.applyLineupToGame());
+
+    // イベント委譲（スロット編集、守備位置、ベンチバッジ）
+    this.container.querySelector("#lineup-slots-container")?.addEventListener("change", (e) => {
+      if (e.target.classList.contains("select-slot-pos")) {
+        const idx = parseInt(e.target.dataset.order, 10);
+        const lineup = this.targetTeam === "my" ? this.myLineup : this.oppLineup;
+        if (lineup[idx]) lineup[idx].pos = e.target.value;
       }
     });
 
-    const btnSide = this.container.querySelector("#btn-toggle-attack-side");
-    if (btnSide) {
-      btnSide.addEventListener("click", () => {
-        this.myTeamSide = this.myTeamSide === "away" ? "home" : "away";
-        syncGameInfo();
-        this.render();
-        this.initSubComponents();
-        this.bindEvents();
-      });
-    }
-
-    const btnMatchType = this.container.querySelector("#btn-toggle-match-type");
-    if (btnMatchType) {
-      btnMatchType.addEventListener("click", () => {
-        this.matchType = this.matchType === "official" ? "practice" : "official";
-        this.saveMatchType(this.matchType);
-        this.syncLineupNumbersWithCurrentMode();
-        this.render();
-        this.initSubComponents();
-        this.bindEvents();
-      });
-    }
-
-    const btnMy = this.container.querySelector("#team-switch-my");
-    const btnOpp = this.container.querySelector("#team-switch-opp");
-    if (btnMy) {
-      btnMy.addEventListener("click", () => {
-        this.targetTeam = "my";
-        this.render();
-        this.initSubComponents();
-        this.bindEvents();
-      });
-    }
-    if (btnOpp) {
-      btnOpp.addEventListener("click", () => {
-        this.targetTeam = "opp";
-        this.render();
-        this.initSubComponents();
-        this.bindEvents();
-      });
-    }
-
-    const btnCopy = this.container.querySelector("#btn-copy-prev-order");
-    if (btnCopy) {
-      btnCopy.addEventListener("click", () => {
-        this.myLineup = this.generateDefaultLineup();
-        this.render();
-        this.initSubComponents();
-        this.bindEvents();
-      });
-    }
-
-    this.container.querySelectorAll(".select-slot-pos").forEach((sel) => {
-      sel.addEventListener("change", (e) => {
-        const orderIdx = parseInt(e.target.getAttribute("data-order"), 10);
-        const lineup = this.targetTeam === "my" ? this.myLineup : this.oppLineup;
-        if (lineup[orderIdx]) lineup[orderIdx].pos = e.target.value;
-      });
+    this.container.querySelector("#lineup-slots-container")?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-open-slot-edit");
+      if (!btn) return;
+      const idx = parseInt(btn.dataset.order, 10);
+      if (this.targetTeam === "opp") this.tenkeyComponent?.open(idx, this.oppLineup[idx] || {});
+      else this.openPlayerSelectPrompt(idx);
     });
 
-    this.container.querySelectorAll(".btn-open-slot-edit").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const orderIdx = parseInt(btn.getAttribute("data-order"), 10);
-        if (this.targetTeam === "opp") {
-          if (this.tenkeyComponent) {
-            this.tenkeyComponent.open(orderIdx, this.oppLineup[orderIdx] || {});
-          }
-        } else {
-          this.openPlayerSelectPrompt(orderIdx);
-        }
-      });
+    this.container.addEventListener("click", (e) => {
+      const badge = e.target.closest(".btn-bench-badge");
+      if (!badge) return;
+      const player = this.roster.find(p => p.id === badge.dataset.playerId);
+      if (!player) return;
+      const targetIdx = Math.max(0, this.myLineup.findIndex(s => !s.playerId));
+      this.myLineup[targetIdx] = { order: targetIdx + 1, playerId: player.id, number: this.getPlayerNumber(player), name: player.name, pos: player.pos };
+      this.refresh();
     });
 
-    this.bindLineupDragAndDrop();
-
-    this.container.querySelectorAll(".btn-bench-badge").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const pId = btn.getAttribute("data-player-id");
-        const player = this.roster.find((p) => p.id === pId);
-        if (!player) return;
-
-        const emptyIdx = this.myLineup.findIndex((slot) => !slot.playerId);
-        const targetIdx = emptyIdx !== -1 ? emptyIdx : 0;
-        this.myLineup[targetIdx] = {
-          order: targetIdx + 1,
-          playerId: player.id,
-          number: this.getPlayerNumber(player),
-          name: player.name,
-          pos: player.pos
-        };
-        this.render();
-        this.initSubComponents();
-        this.bindEvents();
-      });
-    });
-
-    const btnApply = this.container.querySelector("#btn-apply-lineup");
-    if (btnApply) {
-      btnApply.addEventListener("click", () => this.applyLineupToGame());
-    }
+    this.bindDnD();
   }
 
-  bindLineupDragAndDrop() {
-    const rows = this.container.querySelectorAll(".lineup-slot-row");
-    let draggedIndex = null;
+  bindDnD() {
+    const container = this.container.querySelector("#lineup-slots-container");
+    if (!container) return;
+    const rows = container.querySelectorAll(".lineup-slot-row");
+    let dragIdx = null, touchRow = null;
 
-    rows.forEach((row) => {
-      row.addEventListener("dragstart", (e) => {
-        draggedIndex = parseInt(row.getAttribute("data-order"), 10);
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", draggedIndex);
-        row.classList.add("opacity-40", "scale-[0.98]", "border-emerald-500");
-      });
-      row.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        row.classList.add("bg-emerald-950/40", "border-emerald-400");
-      });
-      row.addEventListener("dragleave", () => {
-        row.classList.remove("bg-emerald-950/40", "border-emerald-400");
-      });
+    rows.forEach(row => {
+      row.addEventListener("dragstart", (e) => { dragIdx = parseInt(row.dataset.order, 10); e.dataTransfer.setData("text/plain", dragIdx); row.classList.add("opacity-40", "border-emerald-500"); });
+      row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("bg-emerald-950/40", "border-emerald-400"); });
+      row.addEventListener("dragleave", () => row.classList.remove("bg-emerald-950/40", "border-emerald-400"));
       row.addEventListener("drop", (e) => {
         e.preventDefault();
         row.classList.remove("bg-emerald-950/40", "border-emerald-400");
-        const targetIndex = parseInt(row.getAttribute("data-order"), 10);
-        if (draggedIndex !== null && draggedIndex !== targetIndex) {
-          this.reorderLineup(draggedIndex, targetIndex);
-        }
+        const targetIdx = parseInt(row.dataset.order, 10);
+        if (dragIdx !== null && dragIdx !== targetIdx) this.reorderLineup(dragIdx, targetIdx);
       });
-      row.addEventListener("dragend", () => {
-        row.classList.remove("opacity-40", "scale-[0.98]", "border-emerald-500", "bg-emerald-950/40", "border-emerald-400");
-        draggedIndex = null;
-      });
-    });
+      row.addEventListener("dragend", () => { rows.forEach(r => r.classList.remove("opacity-40", "border-emerald-500", "bg-emerald-950/40", "border-emerald-400")); dragIdx = null; });
 
-    rows.forEach((row) => {
+      // スマホタッチDnD
       const handle = row.querySelector(".drag-handle");
-      if (!handle) return;
-      let activeRow = null;
-
-      handle.addEventListener("touchstart", () => {
-        draggedIndex = parseInt(row.getAttribute("data-order"), 10);
-        activeRow = row;
-        row.classList.add("opacity-60", "border-emerald-500", "bg-slate-900");
+      handle?.addEventListener("touchstart", () => { dragIdx = parseInt(row.dataset.order, 10); touchRow = row; row.classList.add("opacity-60", "border-emerald-500"); }, { passive: true });
+      handle?.addEventListener("touchmove", (e) => {
+        const el = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY)?.closest(".lineup-slot-row");
+        rows.forEach(r => r.classList.remove("bg-emerald-950/50", "border-emerald-400"));
+        if (el && el !== touchRow) el.classList.add("bg-emerald-950/50", "border-emerald-400");
       }, { passive: true });
-
-      handle.addEventListener("touchmove", (e) => {
-        const clientY = e.touches[0].clientY;
-        const elementBelow = document.elementFromPoint(e.touches[0].clientX, clientY);
-        if (!elementBelow) return;
-        const targetRow = elementBelow.closest(".lineup-slot-row");
-        rows.forEach((r) => r.classList.remove("bg-emerald-950/50", "border-emerald-400"));
-        if (targetRow && targetRow !== activeRow) {
-          targetRow.classList.add("bg-emerald-950/50", "border-emerald-400");
+      handle?.addEventListener("touchend", (e) => {
+        rows.forEach(r => r.classList.remove("opacity-60", "border-emerald-500", "bg-emerald-950/50", "border-emerald-400"));
+        const el = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY)?.closest(".lineup-slot-row");
+        if (el && dragIdx !== null) {
+          const targetIdx = parseInt(el.dataset.order, 10);
+          if (dragIdx !== targetIdx) this.reorderLineup(dragIdx, targetIdx);
         }
-      }, { passive: true });
-
-      handle.addEventListener("touchend", (e) => {
-        rows.forEach((r) => r.classList.remove("opacity-60", "border-emerald-500", "bg-slate-900", "bg-emerald-950/50", "border-emerald-400"));
-        const clientY = e.changedTouches[0].clientY;
-        const elementBelow = document.elementFromPoint(e.changedTouches[0].clientX, clientY);
-        if (elementBelow) {
-          const targetRow = elementBelow.closest(".lineup-slot-row");
-          if (targetRow) {
-            const targetIndex = parseInt(targetRow.getAttribute("data-order"), 10);
-            if (draggedIndex !== null && draggedIndex !== targetIndex) {
-              this.reorderLineup(draggedIndex, targetIndex);
-            }
-          }
-        }
-        draggedIndex = null;
-        activeRow = null;
+        dragIdx = touchRow = null;
       });
     });
   }
 
-  reorderLineup(fromIndex, toIndex) {
+  reorderLineup(fromIdx, toIdx) {
     const lineup = this.targetTeam === "my" ? this.myLineup : this.oppLineup;
-    if (!lineup[fromIndex] || !lineup[toIndex]) return;
+    if (!lineup[fromIdx] || !lineup[toIdx]) return;
 
-    const modalScrollEl = this.container.querySelector(".overflow-y-auto");
-    const modalScrollTop = modalScrollEl ? modalScrollEl.scrollTop : 0;
-    const slotsScrollEl = this.container.querySelector("#lineup-slots-container");
-    const slotsScrollTop = slotsScrollEl ? slotsScrollEl.scrollTop : 0;
+    const modalScroll = this.container.querySelector(".overflow-y-auto")?.scrollTop || 0;
+    const slotsScroll = this.container.querySelector("#lineup-slots-container")?.scrollTop || 0;
 
-    const [movedItem] = lineup.splice(fromIndex, 1);
-    lineup.splice(toIndex, 0, movedItem);
-    lineup.forEach((slot, idx) => {
-      slot.order = idx + 1;
-    });
+    const [moved] = lineup.splice(fromIdx, 1);
+    lineup.splice(toIdx, 0, moved);
+    lineup.forEach((s, i) => { s.order = i + 1; });
 
-    this.saveLineup(this.targetTeam, lineup);
-    this.render();
-    this.initSubComponents();
-    this.bindEvents();
+    this.saveStorage(`gakudo_lineup_${this.targetTeam}`, lineup);
+    this.refresh();
 
-    const newModalScrollEl = this.container.querySelector(".overflow-y-auto");
-    if (newModalScrollEl) newModalScrollEl.scrollTop = modalScrollTop;
-    const newSlotsScrollEl = this.container.querySelector("#lineup-slots-container");
-    if (newSlotsScrollEl) newSlotsScrollEl.scrollTop = slotsScrollTop;
+    const mEl = this.container.querySelector(".overflow-y-auto");
+    if (mEl) mEl.scrollTop = modalScroll;
+    const sEl = this.container.querySelector("#lineup-slots-container");
+    if (sEl) sEl.scrollTop = slotsScroll;
   }
 
-  openPlayerSelectPrompt(orderIdx) {
-    const listStr = this.roster.map((p, idx) => `${idx + 1}: #${this.getPlayerNumber(p)} ${p.name} (${p.pos})`).join("\n");
-    const selectIdx = prompt(`【${orderIdx + 1}番打者】割り当てる番号を入力してください:\n${listStr}`);
-    if (!selectIdx) return;
-
-    const idx = parseInt(selectIdx, 10) - 1;
-    const player = this.roster[idx];
+  openPlayerSelectPrompt(idx) {
+    const list = this.roster.map((p, i) => `${i + 1}: #${this.getPlayerNumber(p)} ${p.name} (${p.pos})`).join("\n");
+    const sel = prompt(`【${idx + 1}番打者】割り当てる番号を入力してください:\n${list}`);
+    if (!sel) return;
+    const player = this.roster[parseInt(sel, 10) - 1];
     if (player) {
-      this.myLineup[orderIdx] = {
-        order: orderIdx + 1,
-        playerId: player.id,
-        number: this.getPlayerNumber(player),
-        name: player.name,
-        pos: player.pos
-      };
-      this.render();
-      this.initSubComponents();
-      this.bindEvents();
+      this.myLineup[idx] = { order: idx + 1, playerId: player.id, number: this.getPlayerNumber(player), name: player.name, pos: player.pos };
+      this.refresh();
     }
   }
 
-  getPlayerNumber(player) {
-    if (!player) return 0;
-    return this.matchType === "practice" ? (player.practiceNumber ?? player.number ?? 0) : (player.officialNumber ?? player.number ?? 0);
+  getPlayerNumber(p) {
+    return this.matchType === "practice" ? (p.practiceNumber ?? p.number ?? 0) : (p.officialNumber ?? p.number ?? 0);
   }
 
-  syncLineupNumbersWithCurrentMode() {
-    this.myLineup.forEach((slot) => {
-      if (slot && slot.playerId) {
-        const p = this.roster.find((r) => r.id === slot.playerId);
-        if (p) slot.number = this.getPlayerNumber(p);
-      }
+  syncLineupNumbers() {
+    this.myLineup.forEach(s => {
+      const p = s?.playerId && this.roster.find(r => r.id === s.playerId);
+      if (p) s.number = this.getPlayerNumber(p);
     });
-    this.saveLineup("my", this.myLineup);
+    this.saveStorage("gakudo_lineup_my", this.myLineup);
   }
 
   applyLineupToGame() {
-    const inputDate = this.container.querySelector("#input-game-date");
-    const inputTournament = this.container.querySelector("#input-game-tournament");
-    const inputVenue = this.container.querySelector("#input-game-venue");
-    const inputMyTeam = this.container.querySelector("#input-team-my");
-    const inputOppTeam = this.container.querySelector("#input-team-opp");
-
-    if (typeof this.gameState.updateGameInfo === "function") {
-      this.gameState.updateGameInfo({
-        date: inputDate ? inputDate.value : undefined,
-        tournament: inputTournament ? inputTournament.value : undefined,
-        venue: inputVenue ? inputVenue.value : undefined,
-        myTeamName: inputMyTeam ? inputMyTeam.value : undefined,
-        oppTeamName: inputOppTeam ? inputOppTeam.value : undefined,
-        myTeamSide: this.myTeamSide
-      });
-    }
+    const gInfo = {
+      date: this.container.querySelector("#input-game-date")?.value,
+      tournament: this.container.querySelector("#input-game-tournament")?.value,
+      venue: this.container.querySelector("#input-game-venue")?.value,
+      myTeamName: this.container.querySelector("#input-team-my")?.value,
+      oppTeamName: this.container.querySelector("#input-team-opp")?.value,
+      myTeamSide: this.myTeamSide
+    };
+    this.gameState.updateGameInfo?.(gInfo);
 
     const state = this.gameState.getState();
-    if (!state.teams) return;
+    if (!state?.teams) return;
 
-    const awayLineup = this.myTeamSide === "away" ? this.myLineup : this.oppLineup;
-    const homeLineup = this.myTeamSide === "home" ? this.myLineup : this.oppLineup;
-    const awayPitcher = awayLineup.find((s) => s.pos === "投") || awayLineup[0];
-    const homePitcher = homeLineup.find((s) => s.pos === "投") || homeLineup[0];
+    const away = this.myTeamSide === "away" ? this.myLineup : this.oppLineup;
+    const home = this.myTeamSide === "home" ? this.myLineup : this.oppLineup;
+    const aP = away.find(s => s.pos === "投") || away[0];
+    const hP = home.find(s => s.pos === "投") || home[0];
 
-    state.teams.away.roster = awayLineup.map((s, idx) => ({ order: idx + 1, number: s.number, name: s.name, pos: s.pos }));
-    state.teams.away.pitcher = { name: awayPitcher ? awayPitcher.name : "先発 投手", number: awayPitcher ? awayPitcher.number : 1 };
+    state.teams.away.roster = away.map((s, i) => ({ order: i + 1, number: s.number, name: s.name, pos: s.pos }));
+    state.teams.away.pitcher = { name: aP?.name || "先発 投手", number: aP?.number || 1 };
+    state.teams.home.roster = home.map((s, i) => ({ order: i + 1, number: s.number, name: s.name, pos: s.pos }));
+    state.teams.home.pitcher = { name: hP?.name || "相手 投手", number: hP?.number || 1 };
 
-    state.teams.home.roster = homeLineup.map((s, idx) => ({ order: idx + 1, number: s.number, name: s.name, pos: s.pos }));
-    state.teams.home.pitcher = { name: homePitcher ? homePitcher.name : "相手 投手", number: homePitcher ? homePitcher.number : 1 };
-
-    if (typeof this.gameState.syncCurrentMatchup === "function") {
-      this.gameState.syncCurrentMatchup();
-    }
-
-    this.saveLineup("my", this.myLineup);
-    this.saveLineup("opp", this.oppLineup);
+    this.gameState.syncCurrentMatchup?.();
+    this.saveStorage("gakudo_lineup_my", this.myLineup);
+    this.saveStorage("gakudo_lineup_opp", this.oppLineup);
     this.gameState.notify();
     this.container.classList.add("hidden");
   }
@@ -618,66 +366,13 @@ export class RosterViewComponent {
   }
 
   generateOpponentDefaultLineup() {
-    return Array.from({ length: 9 }, (_, i) => ({
-      order: i + 1,
-      number: i + 1,
-      name: `相手 ${i + 1}番`,
-      pos: POSITIONS[i] ? POSITIONS[i].id : "外"
-    }));
+    return Array.from({ length: 9 }, (_, i) => ({ order: i + 1, number: i + 1, name: `相手 ${i + 1}番`, pos: POSITIONS[i]?.id || "外" }));
   }
 
-  saveRoster() {
-    try {
-      localStorage.setItem("gakudo_roster_master", JSON.stringify(this.roster));
-    } catch (e) {
-      console.warn("名簿保存失敗", e);
-    }
-  }
-
+  saveStorage(key, val) { try { localStorage.setItem(key, typeof val === "string" ? val : JSON.stringify(val)); } catch (e) {} }
+  loadStorage(key, fallback = null) { try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : fallback; } catch (e) { return localStorage.getItem(key) || fallback; } }
   loadRoster() {
-    try {
-      const data = localStorage.getItem("gakudo_roster_master");
-      const list = data ? JSON.parse(data) : DEFAULT_ROSTER;
-      return list.map((p) => ({
-        ...p,
-        officialNumber: p.officialNumber ?? p.number ?? 99,
-        practiceNumber: p.practiceNumber ?? p.number ?? 99
-      }));
-    } catch (e) {
-      return DEFAULT_ROSTER;
-    }
-  }
-
-  saveMatchType(type) {
-    try {
-      localStorage.setItem("gakudo_match_type", type);
-    } catch (e) {
-      console.warn("試合種別保存失敗", e);
-    }
-  }
-
-  loadMatchType() {
-    try {
-      return localStorage.getItem("gakudo_match_type") || "official";
-    } catch (e) {
-      return "official";
-    }
-  }
-
-  saveLineup(team, lineup) {
-    try {
-      localStorage.setItem(`gakudo_lineup_${team}`, JSON.stringify(lineup));
-    } catch (e) {
-      console.warn("オーダー保存失敗", e);
-    }
-  }
-
-  loadLineup(team) {
-    try {
-      const data = localStorage.getItem(`gakudo_lineup_${team}`);
-      return data ? JSON.parse(data) : null;
-    } catch (e) {
-      return null;
-    }
+    const list = this.loadStorage("gakudo_roster_master", DEFAULT_ROSTER);
+    return list.map(p => ({ ...p, officialNumber: p.officialNumber ?? p.number ?? 99, practiceNumber: p.practiceNumber ?? p.number ?? 99 }));
   }
 }
