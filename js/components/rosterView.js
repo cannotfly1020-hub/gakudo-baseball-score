@@ -1,11 +1,12 @@
 /**
  * js/components/rosterView.js
- * 団員名簿 ＆ オーダー編成（司令塔コンポーネント 完全版）
+ * 団員名簿 ＆ オーダー編成（司令塔コンポーネント 完全動作保証版）
  * 
  * 責務:
  * - 試合基本情報の自動同期 (日付・大会名・球場名・チーム名)
  * - 1〜9番オーダー編成スロット (PC/スマホDnD・スクロール位置保持)
- * - ベンチ名簿バッジから打順への直接ドラッグ＆ドロップ割当 (PC/スマホDnD)
+ * - ベンチ名簿バッジから打順への直接ドラッグ＆ドロップ割当 (divドラッグ化で完全動作)
+ * - ドロップ時に枠の守備位置を最優先キープ (ポジション崩れ防止)
  * - 公式戦/練習試合 2系統背番号切替
  * - 各種モーダル連携 (TenkeyModalComponent / RosterMasterTabComponent)
  * - GameState へのオーダー反映
@@ -140,6 +141,7 @@ export class RosterViewComponent {
 
     return `
       <div class="space-y-3">
+        <!-- 試合基本情報入力 -->
         <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-2">
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1">
@@ -172,6 +174,7 @@ export class RosterViewComponent {
           </div>
         </div>
 
+        <!-- 攻守設定・背番号モード・チーム切替 -->
         <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
           <div class="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
             <span class="text-[11px] text-slate-400 font-bold">自チーム:</span>
@@ -198,6 +201,7 @@ export class RosterViewComponent {
           </div>
         </div>
 
+        <!-- 1〜9番 打順スロット（DnD受け皿） -->
         <div id="lineup-slots-container" class="space-y-1.5 max-h-[46vh] overflow-y-auto pr-1">
           ${currentLineup
             .map((slot, index) => `
@@ -224,6 +228,7 @@ export class RosterViewComponent {
             .join("")}
         </div>
 
+        <!-- 名簿バッジ一覧（div要素としてドラッグを100%確実に発火） -->
         ${isMyTeam ? `
           <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-1">
             <div class="flex items-center justify-between text-[11px]">
@@ -239,12 +244,12 @@ export class RosterViewComponent {
                   const isAssigned = this.myLineup.some((slot) => slot.playerId === p.id);
                   const displayNum = this.getPlayerNumber(p);
                   return `
-                    <button type="button" draggable="true" class="btn-bench-badge px-2 py-0.5 rounded text-[11px] font-bold border transition flex items-center gap-1 select-none cursor-grab active:cursor-grabbing ${
+                    <div role="button" draggable="true" class="btn-bench-badge px-2 py-0.5 rounded text-[11px] font-bold border transition flex items-center gap-1 select-none cursor-grab active:cursor-grabbing ${
                       isAssigned ? "bg-slate-800/40 border-slate-800 text-slate-600 opacity-60" : "bg-slate-800 border-slate-700 text-emerald-400 hover:bg-emerald-950/50 hover:border-emerald-600 active:scale-95 shadow"
                     }" data-player-id="${p.id}" title="タップで割当、またはドラッグして目的の打順へドロップ">
-                      <span class="font-mono font-black">#${displayNum}</span>
-                      <span class="text-slate-200">${p.name.split(" ")[0]}</span>
-                    </button>
+                      <span class="font-mono font-black pointer-events-none">#${displayNum}</span>
+                      <span class="text-slate-200 pointer-events-none">${p.name.split(" ")[0]}</span>
+                    </div>
                   `;
                 })
                 .join("")}
@@ -391,14 +396,15 @@ export class RosterViewComponent {
     });
 
     this.bindLineupDragAndDrop();
+
     // ベンチバッジ：ワンタップ時は「空き枠へ先頭から配置」
-    this.container.querySelectorAll(".btn-bench-badge").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        if (btn.dataset.wasDragged === "true") {
-          btn.dataset.wasDragged = "false";
+    this.container.querySelectorAll(".btn-bench-badge").forEach((badge) => {
+      badge.addEventListener("click", () => {
+        if (badge.dataset.wasDragged === "true") {
+          badge.dataset.wasDragged = "false";
           return;
         }
-        const pId = btn.getAttribute("data-player-id");
+        const pId = badge.getAttribute("data-player-id");
         const player = this.roster.find((p) => p.id === pId);
         if (!player) return;
 
@@ -417,35 +423,36 @@ export class RosterViewComponent {
   bindLineupDragAndDrop() {
     const rows = this.container.querySelectorAll(".lineup-slot-row");
     const badges = this.container.querySelectorAll(".btn-bench-badge");
-    let dragData = null;
+    let currentDragPayload = null;
 
+    // 1. スロット行の PC ドラッグ
     rows.forEach((row) => {
       row.addEventListener("dragstart", (e) => {
         const orderIdx = parseInt(row.getAttribute("data-order"), 10);
-        dragData = { type: "slot", index: orderIdx };
+        currentDragPayload = { type: "slot", index: orderIdx };
         e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+        e.dataTransfer.setData("text/plain", JSON.stringify(currentDragPayload));
         row.classList.add("opacity-40", "scale-[0.98]", "border-emerald-500");
       });
 
       row.addEventListener("dragover", (e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
-        row.classList.add("bg-emerald-950/50", "border-emerald-400");
+        row.classList.add("bg-emerald-950/60", "border-emerald-400");
       });
 
       row.addEventListener("dragleave", () => {
-        row.classList.remove("bg-emerald-950/50", "border-emerald-400");
+        row.classList.remove("bg-emerald-950/60", "border-emerald-400");
       });
 
       row.addEventListener("drop", (e) => {
         e.preventDefault();
-        row.classList.remove("bg-emerald-950/50", "border-emerald-400");
+        row.classList.remove("bg-emerald-950/60", "border-emerald-400");
         const targetIndex = parseInt(row.getAttribute("data-order"), 10);
 
         try {
           const raw = e.dataTransfer.getData("text/plain");
-          const payload = raw ? JSON.parse(raw) : dragData;
+          const payload = raw ? JSON.parse(raw) : currentDragPayload;
           if (!payload) return;
 
           if (payload.type === "slot" && payload.index !== targetIndex) {
@@ -454,31 +461,33 @@ export class RosterViewComponent {
             this.assignPlayerToSlot(payload.playerId, targetIndex);
           }
         } catch (err) {
-          console.warn("ドロップデータ解析エラー", err);
+          console.warn("ドロップ解析エラー", err);
         }
       });
 
       row.addEventListener("dragend", () => {
-        rows.forEach((r) => r.classList.remove("opacity-40", "scale-[0.98]", "border-emerald-500", "bg-emerald-950/50", "border-emerald-400"));
-        dragData = null;
+        rows.forEach((r) => r.classList.remove("opacity-40", "scale-[0.98]", "border-emerald-500", "bg-emerald-950/60", "border-emerald-400"));
+        currentDragPayload = null;
       });
     });
 
+    // 2. 名簿バッジの PC ドラッグ (div要素で確実に発火)
     badges.forEach((badge) => {
       badge.addEventListener("dragstart", (e) => {
         const pId = badge.getAttribute("data-player-id");
-        dragData = { type: "bench", playerId: pId };
+        currentDragPayload = { type: "bench", playerId: pId };
         e.dataTransfer.effectAllowed = "copyMove";
-        e.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+        e.dataTransfer.setData("text/plain", JSON.stringify(currentDragPayload));
         badge.classList.add("opacity-50", "border-emerald-400");
       });
 
       badge.addEventListener("dragend", () => {
         badge.classList.remove("opacity-50", "border-emerald-400");
-        dragData = null;
+        currentDragPayload = null;
       });
     });
 
+    // 3. スロット行の スマホタッチ DnD
     rows.forEach((row) => {
       const handle = row.querySelector(".drag-handle");
       if (!handle) return;
@@ -486,7 +495,7 @@ export class RosterViewComponent {
 
       handle.addEventListener("touchstart", () => {
         const orderIdx = parseInt(row.getAttribute("data-order"), 10);
-        dragData = { type: "slot", index: orderIdx };
+        currentDragPayload = { type: "slot", index: orderIdx };
         activeRow = row;
         row.classList.add("opacity-60", "border-emerald-500", "bg-slate-900");
       }, { passive: true });
@@ -496,30 +505,31 @@ export class RosterViewComponent {
         const elBelow = document.elementFromPoint(e.touches[0].clientX, clientY);
         if (!elBelow) return;
         const targetRow = elBelow.closest(".lineup-slot-row");
-        rows.forEach((r) => r.classList.remove("bg-emerald-950/50", "border-emerald-400"));
+        rows.forEach((r) => r.classList.remove("bg-emerald-950/60", "border-emerald-400"));
         if (targetRow && targetRow !== activeRow) {
-          targetRow.classList.add("bg-emerald-950/50", "border-emerald-400");
+          targetRow.classList.add("bg-emerald-950/60", "border-emerald-400");
         }
       }, { passive: true });
 
       handle.addEventListener("touchend", (e) => {
-        rows.forEach((r) => r.classList.remove("opacity-60", "border-emerald-500", "bg-slate-900", "bg-emerald-950/50", "border-emerald-400"));
+        rows.forEach((r) => r.classList.remove("opacity-60", "border-emerald-500", "bg-slate-900", "bg-emerald-950/60", "border-emerald-400"));
         const clientY = e.changedTouches[0].clientY;
         const elBelow = document.elementFromPoint(e.changedTouches[0].clientX, clientY);
         if (elBelow) {
           const targetRow = elBelow.closest(".lineup-slot-row");
-          if (targetRow && dragData && dragData.type === "slot") {
+          if (targetRow && currentDragPayload && currentDragPayload.type === "slot") {
             const targetIndex = parseInt(targetRow.getAttribute("data-order"), 10);
-            if (dragData.index !== targetIndex) {
-              this.reorderLineup(dragData.index, targetIndex);
+            if (currentDragPayload.index !== targetIndex) {
+              this.reorderLineup(currentDragPayload.index, targetIndex);
             }
           }
         }
-        dragData = null;
+        currentDragPayload = null;
         activeRow = null;
       });
     });
 
+    // 4. 名簿バッジの スマホタッチ DnD
     badges.forEach((badge) => {
       let startX = 0, startY = 0;
       let isDragging = false;
@@ -536,7 +546,7 @@ export class RosterViewComponent {
         const moveX = Math.abs(e.touches[0].clientX - startX);
         const moveY = Math.abs(e.touches[0].clientY - startY);
 
-        if (moveX > 10 || moveY > 10) {
+        if (moveX > 8 || moveY > 8) {
           isDragging = true;
           badge.dataset.wasDragged = "true";
           badge.classList.add("opacity-50", "border-emerald-400");
@@ -582,18 +592,18 @@ export class RosterViewComponent {
     const existingIndex = this.myLineup.findIndex((slot) => slot.playerId === player.id);
     const targetSlot = this.myLineup[targetIndex];
 
-    // 枠にすでに設定されている守備位置を最優先でキープ（勝手に名簿の初期値で上書きしない）
+    // 枠にすでに設定されている守備位置を最優先でキープ（名簿の初期値で勝手に上書きしない）
     const preservedTargetPos = targetSlot.pos || player.pos || "外";
 
     if (existingIndex !== -1 && existingIndex !== targetIndex) {
-      // 既存スロットと入れ替える場合も、各枠の守備位置は維持して選手のみスワップ
+      // 既存枠と入れ替える場合も、各枠の守備位置は維持して選手情報のみスワップ
       const existingSlot = this.myLineup[existingIndex];
       this.myLineup[existingIndex] = {
         order: existingIndex + 1,
         playerId: targetSlot.playerId,
         number: targetSlot.number,
         name: targetSlot.name,
-        pos: existingSlot.pos // 既存枠の守備位置を維持
+        pos: existingSlot.pos // 既存枠の守備位置をキープ
       };
     }
 
@@ -602,7 +612,7 @@ export class RosterViewComponent {
       playerId: player.id,
       number: this.getPlayerNumber(player),
       name: player.name,
-      pos: preservedTargetPos // 目的枠の守備位置を維持
+      pos: preservedTargetPos // 目的枠の守備位置をキープ
     };
 
     this.saveLineup("my", this.myLineup);
@@ -625,16 +635,16 @@ export class RosterViewComponent {
     const slotsScrollEl = this.container.querySelector("#lineup-slots-container");
     const slotsScrollTop = slotsScrollEl ? slotsScrollEl.scrollTop : 0;
 
-    // 各打順スロットの守備位置を一旦保存
+    // 各打順スロットの守備位置を退避
     const originalPositions = lineup.map((slot) => slot.pos);
 
     const [movedItem] = lineup.splice(fromIndex, 1);
     lineup.splice(toIndex, 0, movedItem);
 
-    // 打順スロットの守備位置はそのままキープし、選手（打順）だけを並び替え
+    // 打順スロットの守備位置は固定キープし、選手（打順）だけを並び替え
     lineup.forEach((slot, idx) => {
       slot.order = idx + 1;
-      slot.pos = originalPositions[idx]; // 枠のポジションを維持
+      slot.pos = originalPositions[idx];
     });
 
     this.saveLineup(this.targetTeam, lineup);
@@ -656,12 +666,13 @@ export class RosterViewComponent {
     const idx = parseInt(selectIdx, 10) - 1;
     const player = this.roster[idx];
     if (player) {
+      const currentSlot = this.myLineup[orderIdx] || {};
       this.myLineup[orderIdx] = {
         order: orderIdx + 1,
         playerId: player.id,
         number: this.getPlayerNumber(player),
         name: player.name,
-        pos: player.pos
+        pos: currentSlot.pos || player.pos || "外" // 枠の守備位置を維持
       };
       this.render();
       this.initSubComponents();
