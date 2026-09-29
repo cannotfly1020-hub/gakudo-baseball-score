@@ -36,7 +36,7 @@ export class GameArchiveModalComponent {
   }
 
   render() {
-    this.container.className = "fixed inset-0 bg-black/85 z-50 p-2 sm:p-4 overflow-y-auto flex items-center justify-center select-none";
+    this.container.className = "hidden fixed inset-0 bg-black/85 z-50 p-2 sm:p-4 overflow-y-auto flex items-center justify-center select-none";
     this.container.innerHTML = `
       <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn">
         
