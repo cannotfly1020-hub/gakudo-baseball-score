@@ -1,10 +1,11 @@
 /**
  * js/app.js
- * アプリ全体の司令塔（完全非同期・ゼロ遅延レスポンス版）
+ * アプリ全体の司令塔（完全非同期・ゼロ遅延レスポンス版 ＆ 過去試合アーカイブ統合）
  * 
  * 改善点:
  * - データベース保存（IndexedDB）を完全非同期デバウンス化し、タップ直後の画面描画を一切ブロックしない
  * - processPlayResult 内の snapshot を createSnapshot に統一
+ * - 過去試合アーカイブ管理モーダル（GameArchiveModalComponent）の全体統合
  */
 
 import { GameState } from "./state.js";
@@ -14,6 +15,7 @@ import { ZoneComponent } from "./components/zone.js";
 import { SprayModalComponent } from "./components/sprayModal.js";
 import { RosterViewComponent } from "./components/rosterView.js";
 import { ScoreSheetComponent } from "./components/scoreSheet.js";
+import { GameArchiveModalComponent } from "./components/gameArchiveModal.js";
 import { dbStorage } from "./storage/indexedDb.js";
 import { DataExporter } from "./storage/exporter.js";
 
@@ -26,6 +28,7 @@ class BaseballApp {
     this.sprayModalComponent = null;
     this.rosterViewComponent = null;
     this.scoreSheetComponent = null;
+    this.gameArchiveModalComponent = null;
     this.saveTimer = null;
   }
 
@@ -45,6 +48,15 @@ class BaseballApp {
       scoresheetSlot.id = "scoresheet-modal-slot";
       scoresheetSlot.className = "hidden";
       document.body.appendChild(scoresheetSlot);
+    }
+
+    // 過去試合アーカイブ受皿スロット（自動生成フォールバック付き）
+    let archiveModalSlot = document.getElementById("archive-modal-slot");
+    if (!archiveModalSlot) {
+      archiveModalSlot = document.createElement("div");
+      archiveModalSlot.id = "archive-modal-slot";
+      archiveModalSlot.className = "hidden";
+      document.body.appendChild(archiveModalSlot);
     }
 
     if (scoreboardSlot) {
@@ -68,6 +80,39 @@ class BaseballApp {
         this.scoreSheetComponent = new ScoreSheetComponent(scoresheetSlot, this.gameState);
       } catch (err) {
         console.error("ScoreSheetComponent 初期化エラー:", err);
+      }
+    }
+
+    if (archiveModalSlot) {
+      try {
+        this.gameArchiveModalComponent = new GameArchiveModalComponent(
+          archiveModalSlot,
+          this.gameState,
+          {
+            // 過去試合のスコア表閲覧（過去試合の状態を一時スコアシートで描画）
+            onViewScoreSheet: (targetGameState) => {
+              try {
+                const tempStateWrapper = { getState: () => targetGameState };
+                const tempSheet = new ScoreSheetComponent(scoresheetSlot, tempStateWrapper);
+                tempSheet.open();
+              } catch (err) {
+                console.error("過去試合のスコア表閲覧エラー:", err);
+              }
+            },
+            // 過去試合の復元・再開
+            onResumeGame: (restoredState) => {
+              this.gameState.state = JSON.parse(JSON.stringify(restoredState));
+              this.gameState.notify();
+              try {
+                dbStorage.saveActiveGame(this.gameState.getState());
+              } catch (err) {
+                console.warn("再開時のバックグラウンド保存スキップ:", err);
+              }
+            }
+          }
+        );
+      } catch (err) {
+        console.error("GameArchiveModalComponent 初期化エラー:", err);
       }
     }
 
@@ -132,6 +177,17 @@ class BaseballApp {
       });
     }
 
+    // 過去試合アーカイブモーダル オープンボタン
+    const archiveBtn = document.getElementById("btn-open-archive");
+    if (archiveBtn) {
+      archiveBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (this.gameArchiveModalComponent) {
+          this.gameArchiveModalComponent.open();
+        }
+      });
+    }
+
     // スコア表オープン処理（診断用通知付き）
     const scoresheetBtn = document.getElementById("btn-open-scoresheet");
     if (scoresheetBtn) {
@@ -149,13 +205,10 @@ class BaseballApp {
           }
           this.scoreSheetComponent.open();
         } catch (err) {
-          // 万が一エラーが出た場合、画面に直接理由を表示
           window.alert("スコア表起動エラー:\n" + err.message);
           console.error(err);
         }
       });
-    } else {
-      console.warn("btn-open-scoresheet が見つかりません");
     }
 
     const exportBtn = document.getElementById("btn-export-csv");
@@ -202,17 +255,14 @@ class BaseballApp {
     // 確定ボタン押下時: 試合データを初期化してIndexedDBに即時同期
     if (resetConfirmBtn && resetModal) {
       resetConfirmBtn.addEventListener("click", () => {
-        // 1. メモリ上の試合状態・履歴を完全初期化
         this.gameState.resetGame();
 
-        // 2. データベース（IndexedDB）の保存領域も白紙状態に即座に同期
         try {
           dbStorage.saveActiveGame(this.gameState.getState());
         } catch (err) {
           console.warn("リセット時のDB保存スキップ:", err);
         }
 
-        // 3. モーダルを閉じる
         resetModal.classList.add("hidden");
       });
     }
@@ -241,10 +291,7 @@ class BaseballApp {
     const snapshot = this.gameState.createSnapshot();
 
     state.pitchCount += 1;
-    // 登板中投手の投球数を加算
     this.gameState.incrementCurrentPitcherCount();
-
-    // 打席完了に伴い、攻撃チームの打順を自動送り（1番〜9番ループ）
     this.gameState.advanceBatter();
 
     const type = playResult.type;
@@ -257,8 +304,6 @@ class BaseballApp {
         break;
 
       case "併殺打":
-        // 1. 併殺における走者の整理
-        // 1塁走者がいた場合: 1塁走者をアウト(消去)とし、2塁走者がいれば3塁へ進塁
         if (state.runners[1]) {
           state.runners[1] = false;
           if (state.runners[2] && !state.runners[3]) {
@@ -270,9 +315,7 @@ class BaseballApp {
         } else if (state.runners[3]) {
           state.runners[3] = false;
         }
-        // 2. 打者アウト ＋ 走者アウト（計2アウト加算）
         this.gameState.handleOut();
-        // 3アウトチェンジになっていなければ、もう1アウト加算
         if (state.outs > 0) {
           this.gameState.handleOut();
         }
@@ -281,23 +324,19 @@ class BaseballApp {
       case "単打":
       case "失策":
       case "振り逃げ":
-        // 3塁走者がいれば本塁生還（モーダル得点が0の場合のみ自動1点加算）
         if (state.runners[3]) {
           state.runners[3] = false;
           if (runsFromPlay === 0) {
             this.gameState.addRun(1);
           }
         }
-        // 各走者が1つ進塁、打者は1塁へ出塁
         state.runners[3] = state.runners[2] || false;
         state.runners[2] = state.runners[1] || false;
         state.runners[1] = true;
         break;
 
       case "野選":
-        // 野選（前走者が封殺され、打者走者は1塁セーフ）
         this.gameState.handleOut();
-        // 3アウトチェンジになっていなければ走者を整理
         if (state.outs > 0) {
           if (state.runners[3]) {
             state.runners[3] = false;
@@ -357,7 +396,6 @@ class BaseballApp {
         break;
     }
 
-    // モーダル側で指定された発生得点（例: 2点以上など）があればスコアに反映
     if (runsFromPlay > 0 && type !== "本塁打") {
       this.gameState.addRun(runsFromPlay);
     }
