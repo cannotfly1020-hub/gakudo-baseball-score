@@ -1,6 +1,6 @@
 /**
  * js/components/rosterMasterTab.js
- * 団員名簿マスタ タブ（公式戦背番号の「なし/空欄」完全対応版）
+ * 団員名簿マスタ タブ（手動DnD並び替え ＆ 学年・背番号・名前ワンタップソート対応版）
  */
 
 export class RosterMasterTabComponent {
@@ -8,6 +8,8 @@ export class RosterMasterTabComponent {
     this.container = containerElement;
     this.options = options;
     this.editingPlayerIndex = null;
+    this.sortKey = null; // "offNum" | "pracNum" | "name" | "grade"
+    this.sortAsc = true;
   }
 
   render() {
@@ -16,11 +18,11 @@ export class RosterMasterTabComponent {
     this.container.innerHTML = `
       <div class="space-y-3">
         <!-- 上部操作バー -->
-        <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
           <button type="button" id="btn-open-add-player" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow transition">
             <span>＋ 選手を追加</span>
           </button>
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 flex-wrap">
             <button type="button" id="btn-clear-roster" class="bg-slate-800 hover:bg-rose-950/70 text-slate-400 hover:text-rose-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-700 transition" title="名簿を一度空にして新規取り込みしたい場合に利用">
               <span>全消去</span>
             </button>
@@ -30,23 +32,53 @@ export class RosterMasterTabComponent {
           </div>
         </div>
 
-        <!-- 名簿一覧テーブル -->
-        <div class="overflow-x-auto max-h-[52vh] overflow-y-auto rounded-xl border border-slate-800">
-          <table class="w-full text-left text-xs border-collapse">
+        <!-- クイック並び替え（ソート）バー -->
+        <div class="bg-slate-950/70 p-1.5 rounded-xl border border-slate-800 flex items-center justify-between gap-1 text-[11px] flex-wrap">
+          <span class="text-slate-400 font-bold flex items-center gap-1 pl-1">
+            <span>↕️ 並び替え:</span>
+          </span>
+          <div class="flex items-center gap-1 flex-wrap">
+            <button type="button" class="btn-quick-sort px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded font-bold border border-slate-700 transition" data-sort="offNum">
+              🔢 公式#順
+            </button>
+            <button type="button" class="btn-quick-sort px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded font-bold border border-slate-700 transition" data-sort="pracNum">
+              ⚾️ 練習#順
+            </button>
+            <button type="button" class="btn-quick-sort px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded font-bold border border-slate-700 transition" data-sort="grade">
+              🎓 学年順
+            </button>
+            <button type="button" class="btn-quick-sort px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded font-bold border border-slate-700 transition" data-sort="name">
+              🔤 名前順
+            </button>
+          </div>
+        </div>
+
+        <!-- 名簿一覧テーブル（行DnD対応） -->
+        <div class="overflow-x-auto max-h-[50vh] overflow-y-auto rounded-xl border border-slate-800">
+          <table class="w-full text-left text-xs border-collapse select-none">
             <thead class="bg-slate-950 sticky top-0 border-b border-slate-800 text-[10px] text-slate-400">
               <tr>
-                <th class="py-1.5 px-2">公式#</th>
-                <th class="py-1.5 px-2">練習#</th>
-                <th class="py-1.5 px-2">氏名 (フルネーム)</th>
-                <th class="py-1.5 px-1 text-center">学年</th>
+                <th class="py-1.5 px-1.5 w-6 text-center text-slate-600">移動</th>
+                <th class="py-1.5 px-2 cursor-pointer hover:text-slate-200" data-sort="offNum">
+                  公式# <span class="sort-icon-offNum text-[9px]"></span>
+                </th>
+                <th class="py-1.5 px-2 cursor-pointer hover:text-slate-200" data-sort="pracNum">
+                  練習# <span class="sort-icon-pracNum text-[9px]"></span>
+                </th>
+                <th class="py-1.5 px-2 cursor-pointer hover:text-slate-200" data-sort="name">
+                  氏名 (フルネーム) <span class="sort-icon-name text-[9px]"></span>
+                </th>
+                <th class="py-1.5 px-1 text-center cursor-pointer hover:text-slate-200" data-sort="grade">
+                  学年 <span class="sort-icon-grade text-[9px]"></span>
+                </th>
                 <th class="py-1.5 px-1 text-center">守備</th>
                 <th class="py-1.5 px-2 text-right">操作</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-800">
+            <tbody id="roster-tbody" class="divide-y divide-slate-800">
               ${roster.length === 0 ? `
                 <tr>
-                  <td colspan="6" class="py-6 text-center text-slate-500 text-xs">
+                  <td colspan="7" class="py-6 text-center text-slate-500 text-xs">
                     選手が登録されていません。「＋ 選手を追加」または「テキスト一括取込」から登録してください。
                   </td>
                 </tr>
@@ -56,7 +88,11 @@ export class RosterMasterTabComponent {
                   const hasPrac = p.practiceNumber !== null && p.practiceNumber !== undefined && p.practiceNumber !== "";
 
                   return `
-                    <tr class="hover:bg-slate-800/40">
+                    <tr class="roster-table-row hover:bg-slate-800/40 transition-colors" draggable="true" data-idx="${idx}">
+                      <!-- ドラッグハンドル -->
+                      <td class="py-1.5 px-1.5 text-center text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing roster-drag-handle" title="上下にドラッグして並び替え">
+                        <span class="text-xs select-none">⠿</span>
+                      </td>
                       <td class="py-1.5 px-2 font-mono font-black ${hasOff ? 'text-indigo-400' : 'text-slate-500 font-normal'}">
                         ${hasOff ? `#${p.officialNumber}` : '<span class="text-[11px] text-slate-500 font-sans">なし</span>'}
                       </td>
@@ -64,7 +100,7 @@ export class RosterMasterTabComponent {
                         ${hasPrac ? `#${p.practiceNumber}` : '<span class="text-[11px] text-slate-500 font-sans">なし</span>'}
                       </td>
                       <td class="py-1.5 px-2 font-bold text-slate-100">${p.name}</td>
-                      <td class="py-1.5 px-1 text-slate-400 text-center">${p.grade || 6}年</td>
+                      <td class="py-1.5 px-1 text-slate-400 text-center font-bold">${p.grade || 6}年</td>
                       <td class="py-1.5 px-1 font-bold text-amber-300 text-center">${p.pos || "投"}</td>
                       <td class="py-1.5 px-2 text-right space-x-1">
                         <button type="button" class="btn-edit-player text-sky-300 hover:text-sky-200 text-[10px] font-bold px-2 py-0.5 rounded bg-sky-950/70 border border-sky-800 transition" data-idx="${idx}">
@@ -81,6 +117,7 @@ export class RosterMasterTabComponent {
             </tbody>
           </table>
         </div>
+        <p class="text-[10px] text-slate-500 text-right">※ 左端の「⠿」をドラッグして自由な順序に並び替えできます</p>
       </div>
 
       <!-- 選手情報 編集・追加モーダル -->
@@ -190,6 +227,8 @@ export class RosterMasterTabComponent {
     `;
 
     this.bindEvents();
+    this.bindDragAndDrop();
+    this.updateSortIndicators();
   }
 
   bindEvents() {
@@ -206,6 +245,22 @@ export class RosterMasterTabComponent {
         }
       });
     }
+
+    // クイックソートボタン
+    this.container.querySelectorAll(".btn-quick-sort").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-sort");
+        this.handleSort(key);
+      });
+    });
+
+    // テーブルヘッダークリックによるソート
+    this.container.querySelectorAll("th[data-sort]").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.getAttribute("data-sort");
+        this.handleSort(key);
+      });
+    });
 
     this.container.querySelectorAll(".btn-edit-player").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -242,6 +297,169 @@ export class RosterMasterTabComponent {
     }
 
     this.bindBatchImportEvents();
+  }
+
+  bindDragAndDrop() {
+    const tbody = this.container.querySelector("#roster-tbody");
+    if (!tbody) return;
+    const rows = tbody.querySelectorAll(".roster-table-row");
+    let draggedIndex = null;
+
+    // 1. PC マウスドラッグ
+    rows.forEach((row) => {
+      row.addEventListener("dragstart", (e) => {
+        draggedIndex = parseInt(row.getAttribute("data-idx"), 10);
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", draggedIndex);
+        row.classList.add("opacity-40", "bg-emerald-950/40");
+      });
+
+      row.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        row.classList.add("border-y-2", "border-emerald-400");
+      });
+
+      row.addEventListener("dragleave", () => {
+        row.classList.remove("border-y-2", "border-emerald-400");
+      });
+
+      row.addEventListener("drop", (e) => {
+        e.preventDefault();
+        row.classList.remove("border-y-2", "border-emerald-400");
+        const targetIndex = parseInt(row.getAttribute("data-idx"), 10);
+
+        if (draggedIndex !== null && draggedIndex !== targetIndex) {
+          this.reorderRoster(draggedIndex, targetIndex);
+        }
+      });
+
+      row.addEventListener("dragend", () => {
+        rows.forEach((r) => r.classList.remove("opacity-40", "bg-emerald-950/40", "border-y-2", "border-emerald-400"));
+        draggedIndex = null;
+      });
+    });
+
+    // 2. スマホ タッチドラッグ (ハンドル操作)
+    rows.forEach((row) => {
+      const handle = row.querySelector(".roster-drag-handle");
+      if (!handle) return;
+      let activeRow = null;
+
+      handle.addEventListener("touchstart", () => {
+        draggedIndex = parseInt(row.getAttribute("data-idx"), 10);
+        activeRow = row;
+        row.classList.add("opacity-60", "bg-slate-800");
+      }, { passive: true });
+
+      handle.addEventListener("touchmove", (e) => {
+        const clientY = e.touches[0].clientY;
+        const elBelow = document.elementFromPoint(e.touches[0].clientX, clientY);
+        if (!elBelow) return;
+        const targetRow = elBelow.closest(".roster-table-row");
+        rows.forEach((r) => r.classList.remove("border-y-2", "border-emerald-400"));
+        if (targetRow && targetRow !== activeRow) {
+          targetRow.classList.add("border-y-2", "border-emerald-400");
+        }
+      }, { passive: true });
+
+      handle.addEventListener("touchend", (e) => {
+        rows.forEach((r) => r.classList.remove("opacity-60", "bg-slate-800", "border-y-2", "border-emerald-400"));
+        const clientY = e.changedTouches[0].clientY;
+        const elBelow = document.elementFromPoint(e.changedTouches[0].clientX, clientY);
+        if (elBelow) {
+          const targetRow = elBelow.closest(".roster-table-row");
+          if (targetRow) {
+            const targetIndex = parseInt(targetRow.getAttribute("data-idx"), 10);
+            if (draggedIndex !== null && draggedIndex !== targetIndex) {
+              this.reorderRoster(draggedIndex, targetIndex);
+            }
+          }
+        }
+        draggedIndex = null;
+        activeRow = null;
+      });
+    });
+  }
+
+  reorderRoster(fromIndex, toIndex) {
+    const roster = this.options.getRoster();
+    if (!roster[fromIndex] || !roster[toIndex]) return;
+
+    const [moved] = roster.splice(fromIndex, 1);
+    roster.splice(toIndex, 0, moved);
+
+    this.saveAndRerender(roster);
+  }
+
+  handleSort(key) {
+    if (this.sortKey === key) {
+      this.sortAsc = !this.sortAsc;
+    } else {
+      this.sortKey = key;
+      // 学年のデフォルトは降順（6年→1年）、それ以外は昇順
+      this.sortAsc = key !== "grade";
+    }
+
+    const roster = [...this.options.getRoster()];
+
+    roster.sort((a, b) => {
+      let valA, valB;
+
+      switch (key) {
+        case "offNum": {
+          const numA = (a.officialNumber !== null && a.officialNumber !== undefined && a.officialNumber !== "") ? Number(a.officialNumber) : null;
+          const numB = (b.officialNumber !== null && b.officialNumber !== undefined && b.officialNumber !== "") ? Number(b.officialNumber) : null;
+          // 背番号未付与（なし）は常に後ろへ
+          if (numA === null && numB === null) return 0;
+          if (numA === null) return 1;
+          if (numB === null) return -1;
+          return this.sortAsc ? numA - numB : numB - numA;
+        }
+
+        case "pracNum": {
+          const numA = (a.practiceNumber !== null && a.practiceNumber !== undefined && a.practiceNumber !== "") ? Number(a.practiceNumber) : null;
+          const numB = (b.practiceNumber !== null && b.practiceNumber !== undefined && b.practiceNumber !== "") ? Number(b.practiceNumber) : null;
+          if (numA === null && numB === null) return 0;
+          if (numA === null) return 1;
+          if (numB === null) return -1;
+          return this.sortAsc ? numA - numB : numB - numA;
+        }
+
+        case "grade": {
+          const gA = Number(a.grade) || 0;
+          const gB = Number(b.grade) || 0;
+          if (gA !== gB) {
+            return this.sortAsc ? gA - gB : gB - gA;
+          }
+          // 同学年なら背番号昇順で揃える
+          const numA = a.officialNumber ?? a.practiceNumber ?? 99;
+          const numB = b.officialNumber ?? b.practiceNumber ?? 99;
+          return numA - numB;
+        }
+
+        case "name": {
+          valA = a.name || "";
+          valB = b.name || "";
+          const cmp = valA.localeCompare(valB, "ja");
+          return this.sortAsc ? cmp : -cmp;
+        }
+
+        default:
+          return 0;
+      }
+    });
+
+    this.saveAndRerender(roster);
+  }
+
+  updateSortIndicators() {
+    if (!this.sortKey) return;
+    const iconEl = this.container.querySelector(`.sort-icon-${this.sortKey}`);
+    if (iconEl) {
+      iconEl.textContent = this.sortAsc ? "▲" : "▼";
+      iconEl.className = `sort-icon-${this.sortKey} text-[9px] text-emerald-400 font-bold`;
+    }
   }
 
   openEditModal(idx) {
