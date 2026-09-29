@@ -391,7 +391,7 @@ export class RosterViewComponent {
     });
 
     this.bindLineupDragAndDrop();
-
+    // ベンチバッジ：ワンタップ時は「空き枠へ先頭から配置」
     this.container.querySelectorAll(".btn-bench-badge").forEach((btn) => {
       btn.addEventListener("click", () => {
         if (btn.dataset.wasDragged === "true") {
@@ -582,10 +582,18 @@ export class RosterViewComponent {
     const existingIndex = this.myLineup.findIndex((slot) => slot.playerId === player.id);
     const targetSlot = this.myLineup[targetIndex];
 
+    // 枠にすでに設定されている守備位置を最優先でキープ（勝手に名簿の初期値で上書きしない）
+    const preservedTargetPos = targetSlot.pos || player.pos || "外";
+
     if (existingIndex !== -1 && existingIndex !== targetIndex) {
+      // 既存スロットと入れ替える場合も、各枠の守備位置は維持して選手のみスワップ
+      const existingSlot = this.myLineup[existingIndex];
       this.myLineup[existingIndex] = {
-        ...targetSlot,
-        order: existingIndex + 1
+        order: existingIndex + 1,
+        playerId: targetSlot.playerId,
+        number: targetSlot.number,
+        name: targetSlot.name,
+        pos: existingSlot.pos // 既存枠の守備位置を維持
       };
     }
 
@@ -594,7 +602,7 @@ export class RosterViewComponent {
       playerId: player.id,
       number: this.getPlayerNumber(player),
       name: player.name,
-      pos: player.pos || targetSlot.pos || "外"
+      pos: preservedTargetPos // 目的枠の守備位置を維持
     };
 
     this.saveLineup("my", this.myLineup);
@@ -617,10 +625,16 @@ export class RosterViewComponent {
     const slotsScrollEl = this.container.querySelector("#lineup-slots-container");
     const slotsScrollTop = slotsScrollEl ? slotsScrollEl.scrollTop : 0;
 
+    // 各打順スロットの守備位置を一旦保存
+    const originalPositions = lineup.map((slot) => slot.pos);
+
     const [movedItem] = lineup.splice(fromIndex, 1);
     lineup.splice(toIndex, 0, movedItem);
+
+    // 打順スロットの守備位置はそのままキープし、選手（打順）だけを並び替え
     lineup.forEach((slot, idx) => {
       slot.order = idx + 1;
+      slot.pos = originalPositions[idx]; // 枠のポジションを維持
     });
 
     this.saveLineup(this.targetTeam, lineup);
