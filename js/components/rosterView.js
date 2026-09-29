@@ -181,13 +181,15 @@ export class RosterViewComponent {
         </div>
 
         <!-- 1〜9番 打順スロット一覧 -->
-        <div class="space-y-1.5 max-h-[46vh] overflow-y-auto pr-1">
+        <div id="lineup-slots-container" class="space-y-1.5 max-h-[46vh] overflow-y-auto pr-1">
           ${currentLineup
             .map((slot, index) => `
-              <div class="flex items-center justify-between bg-slate-950/80 border border-slate-800 hover:border-slate-700 px-2.5 py-1.5 rounded-xl text-xs gap-2">
-                <div class="flex items-center gap-1 min-w-[36px]">
+              <div class="lineup-slot-row flex items-center justify-between bg-slate-950/80 border border-slate-800 hover:border-slate-700 px-2 py-1.5 rounded-xl text-xs gap-1.5 transition-all select-none" draggable="true" data-order="${index}">
+                <!-- ドラッグハンドル ＆ 打順番号 -->
+                <div class="flex items-center gap-1 min-w-[42px] cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 drag-handle py-1" title="上下にドラッグして打順を変更">
+                  <span class="text-xs select-none">⠿</span>
                   <span class="font-black text-amber-400 text-sm font-mono">${index + 1}</span>
-                  <span class="text-[10px] text-slate-500">番</span>
+                  <span class="text-[9px] text-slate-500">番</span>
                 </div>
 
                 <!-- 守備位置セレクタ -->
@@ -198,16 +200,16 @@ export class RosterViewComponent {
                 </select>
 
                 <!-- 背番号 ＆ 氏名 -->
-                <button type="button" class="btn-open-slot-edit flex-1 flex items-center justify-between bg-slate-900/90 hover:bg-slate-800 px-2.5 py-1 rounded border border-slate-700 text-left transition" data-order="${index}">
-                  <div class="flex items-center gap-2">
-                    <span class="bg-slate-800 text-emerald-400 font-mono font-black text-xs px-1.5 py-0.5 rounded border border-slate-700">
+                <button type="button" class="btn-open-slot-edit flex-1 flex items-center justify-between bg-slate-900/90 hover:bg-slate-800 px-2 py-1 rounded border border-slate-700 text-left transition truncate" data-order="${index}">
+                  <div class="flex items-center gap-1.5 truncate">
+                    <span class="bg-slate-800 text-emerald-400 font-mono font-black text-xs px-1.5 py-0.5 rounded border border-slate-700 flex-shrink-0">
                       #${slot.number || "-"}
                     </span>
-                    <span class="font-bold text-slate-200 truncate max-w-[130px]">
+                    <span class="font-bold text-slate-200 truncate">
                       ${slot.name || "選手未指定"}
                     </span>
                   </div>
-                  <span class="text-[10px] text-slate-400">変更 ▾</span>
+                  <span class="text-[9px] text-slate-400 flex-shrink-0 ml-1">変更▾</span>
                 </button>
               </div>
             `)
@@ -443,6 +445,9 @@ export class RosterViewComponent {
       });
     });
 
+    // 打順スロットのドラッグ＆ドロップ制御（PCマウス ＆ スマホタッチ両対応）
+    this.bindLineupDragAndDrop();
+
     // ベンチバッジタップで空き枠または先頭へ割当
     this.container.querySelectorAll(".btn-bench-badge").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -474,6 +479,120 @@ export class RosterViewComponent {
         this.applyLineupToGame();
       });
     }
+  }
+
+  /**
+   * 打順スロットのドラッグ＆ドロップ並び替えバインド（HTML5 DnD + タッチ対応）
+   */
+  bindLineupDragAndDrop() {
+    const rows = this.container.querySelectorAll(".lineup-slot-row");
+    let draggedIndex = null;
+
+    // --- 1. PC向け HTML5 Drag and Drop ---
+    rows.forEach((row) => {
+      row.addEventListener("dragstart", (e) => {
+        draggedIndex = parseInt(row.getAttribute("data-order"), 10);
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", draggedIndex);
+        row.classList.add("opacity-40", "scale-[0.98]", "border-emerald-500");
+      });
+
+      row.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        row.classList.add("bg-emerald-950/40", "border-emerald-400");
+      });
+
+      row.addEventListener("dragleave", () => {
+        row.classList.remove("bg-emerald-950/40", "border-emerald-400");
+      });
+
+      row.addEventListener("drop", (e) => {
+        e.preventDefault();
+        row.classList.remove("bg-emerald-950/40", "border-emerald-400");
+        const targetIndex = parseInt(row.getAttribute("data-order"), 10);
+        if (draggedIndex !== null && draggedIndex !== targetIndex) {
+          this.reorderLineup(draggedIndex, targetIndex);
+        }
+      });
+
+      row.addEventListener("dragend", () => {
+        row.classList.remove("opacity-40", "scale-[0.98]", "border-emerald-500", "bg-emerald-950/40", "border-emerald-400");
+        draggedIndex = null;
+      });
+    });
+
+    // --- 2. スマホ・タブレット向け タッチドラッグ並び替え ---
+    rows.forEach((row) => {
+      const handle = row.querySelector(".drag-handle");
+      if (!handle) return;
+
+      let touchStartY = 0;
+      let isTouching = false;
+      let activeRow = null;
+
+      handle.addEventListener("touchstart", (e) => {
+        draggedIndex = parseInt(row.getAttribute("data-order"), 10);
+        touchStartY = e.touches[0].clientY;
+        isTouching = true;
+        activeRow = row;
+        row.classList.add("opacity-60", "border-emerald-500", "bg-slate-900");
+      }, { passive: true });
+
+      handle.addEventListener("touchmove", (e) => {
+        if (!isTouching) return;
+        const currentY = e.touches[0].clientY;
+        const elementBelow = document.elementFromPoint(e.touches[0].clientX, currentY);
+        if (!elementBelow) return;
+
+        const targetRow = elementBelow.closest(".lineup-slot-row");
+        rows.forEach((r) => r.classList.remove("bg-emerald-950/50", "border-emerald-400"));
+        if (targetRow && targetRow !== activeRow) {
+          targetRow.classList.add("bg-emerald-950/50", "border-emerald-400");
+        }
+      }, { passive: true });
+
+      handle.addEventListener("touchend", (e) => {
+        if (!isTouching) return;
+        isTouching = false;
+        rows.forEach((r) => r.classList.remove("opacity-60", "border-emerald-500", "bg-slate-900", "bg-emerald-950/50", "border-emerald-400"));
+
+        const touchEndY = e.changedTouches[0].clientY;
+        const elementBelow = document.elementFromPoint(e.changedTouches[0].clientX, touchEndY);
+        if (elementBelow) {
+          const targetRow = elementBelow.closest(".lineup-slot-row");
+          if (targetRow) {
+            const targetIndex = parseInt(targetRow.getAttribute("data-order"), 10);
+            if (draggedIndex !== null && draggedIndex !== targetIndex) {
+              this.reorderLineup(draggedIndex, targetIndex);
+            }
+          }
+        }
+        draggedIndex = null;
+        activeRow = null;
+      });
+    });
+  }
+
+  /**
+   * 打順スロットを入れ替えて再描画
+   */
+  reorderLineup(fromIndex, toIndex) {
+    const lineup = this.targetTeam === "my" ? this.myLineup : this.oppLineup;
+    if (!lineup[fromIndex] || !lineup[toIndex]) return;
+
+    // 指定位置から要素を取り出し、移動先へ挿入
+    const [movedItem] = lineup.splice(fromIndex, 1);
+    lineup.splice(toIndex, 0, movedItem);
+
+    // 打順番号 (order) を1〜9で再採番
+    lineup.forEach((slot, idx) => {
+      slot.order = idx + 1;
+    });
+
+    this.saveLineup(this.targetTeam, lineup);
+    this.render();
+    this.bindEvents();
   }
 
   bindRosterEvents() {
