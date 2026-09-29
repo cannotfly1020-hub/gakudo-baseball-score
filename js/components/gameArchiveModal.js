@@ -1,29 +1,32 @@
 /**
  * js/components/gameArchiveModal.js
- * 過去試合一覧 ＆ アーカイブ管理モーダルコンポーネント
+ * 過去試合アーカイブ・履歴管理モーダルコンポーネント（CSV出力統合・完全版）
  * 
- * 担当役割:
- * - 保存済み過去試合の一覧をカード形式（日付、大会名、対戦カード、スコア、勝敗）で表示
- * - 「現在の試合を保存」ボタンの実行と即時一覧更新
- * - 各試合カードの「📄 スコア表を見る」「🔄 この試合を再開」「🗑 削除」の操作
- * - 誤操作防止の確認モーダル（削除確認・再開時の上書き確認）
+ * 主な機能:
+ * - 現在の試合のワンタップアーカイブ保存（IndexedDB永続化）
+ * - 現在記録中試合のCSVワンタップ出力
+ * - 保存済み過去試合一覧のカード描画（日付、大会名、対戦カード、スコア、勝敗バッジ）
+ * - 過去試合の公式スコア表（A4印刷・PDF）即時閲覧
+ * - 過去試合のグラウンド復元・再開機能
+ * - 過去試合ごとのCSV個別エクスポート
+ * - 誤操作防止の2段階削除確認ダイアログ
  */
 
 import { gameArchiveStore } from "../storage/gameArchiveStore.js";
+import { DataExporter } from "../storage/exporter.js";
 
 export class GameArchiveModalComponent {
   /**
-   * @param {HTMLElement} containerElement モーダル受皿要素 (#archive-modal-slot)
+   * @param {HTMLElement} containerElement 描画対象の親要素 (#archive-modal-slot)
    * @param {GameState} gameState 試合状態管理インスタンス
-   * @param {Object} callbacks コールバック群 ({ onViewScoreSheet, onResumeGame })
+   * @param {Object} options コールバック等
    */
-  constructor(containerElement, gameState, callbacks = {}) {
+  constructor(containerElement, gameState, options = {}) {
     this.container = containerElement;
     this.gameState = gameState;
-    this.callbacks = callbacks;
-    this.savedGames = [];
-    this.selectedGameId = null;
+    this.options = options;
 
+    this.pendingDeleteId = null; // 削除確認中の試合ID
     this.init();
   }
 
@@ -33,25 +36,27 @@ export class GameArchiveModalComponent {
   }
 
   render() {
+    this.container.className = "fixed inset-0 bg-black/85 z-50 p-2 sm:p-4 overflow-y-auto flex items-center justify-center select-none";
     this.container.innerHTML = `
-      <div id="archive-modal-backdrop" class="fixed inset-0 bg-black/85 z-50 overflow-y-auto p-2 sm:p-4 flex flex-col items-center justify-center select-none">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn">
         
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xl p-3 sm:p-4 shadow-2xl space-y-3 max-h-[90vh] flex flex-col">
-          
-          <!-- ヘッダー -->
-          <div class="flex items-center justify-between border-b border-slate-800 pb-2 flex-shrink-0">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">📁</span>
-              <h2 class="text-sm sm:text-base font-black text-slate-100">試合アーカイブ・履歴管理</h2>
-              <span id="archive-game-count" class="text-[10px] bg-slate-800 text-slate-300 font-mono px-2 py-0.5 rounded border border-slate-700">
-                0件
-              </span>
-            </div>
-            <button type="button" id="btn-close-archive-modal" class="text-slate-400 hover:text-white text-lg px-2 py-0.5 rounded hover:bg-slate-800 transition">
-              ✕
-            </button>
+        <!-- モーダルヘッダー -->
+        <div class="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-800 bg-slate-950/70 flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-base sm:text-lg">📁</span>
+            <h2 class="text-xs sm:text-sm font-black text-slate-100">試合アーカイブ・履歴管理</h2>
+            <span class="text-[10px] bg-slate-800 text-indigo-400 font-mono font-bold px-1.5 py-0.5 rounded border border-indigo-900/50">
+              オフライン保存
+            </span>
           </div>
+          <button type="button" id="btn-close-archive-modal" class="text-slate-400 hover:text-white text-base px-2 py-1 rounded-lg hover:bg-slate-800 transition">
+            ✕
+          </button>
+        </div>
 
+        <!-- スクロール可能コンテンツ領域 -->
+        <div class="p-3 overflow-y-auto space-y-3 flex-1">
+          
           <!-- 現在の試合 保存アクションカード -->
           <div class="bg-slate-950/80 border border-emerald-900/60 rounded-xl p-3 flex-shrink-0 space-y-2">
             <div class="flex items-center justify-between text-xs">
@@ -65,23 +70,30 @@ export class GameArchiveModalComponent {
             </div>
 
             <div class="flex items-center gap-2">
-              <button type="button" id="btn-save-current-game" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black py-2 px-3 rounded-lg text-xs shadow-md transition flex items-center justify-center gap-1.5">
+              <button type="button" id="btn-save-current-game" class="flex-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black py-2 px-2 rounded-lg text-xs shadow-md transition flex items-center justify-center gap-1.5">
                 <span>💾</span>
-                <span>現在の試合をアーカイブに新規保存する</span>
+                <span class="truncate">アーカイブに保存</span>
+              </button>
+              <button type="button" id="btn-export-current-csv" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 font-bold py-2 px-3 rounded-lg text-xs border border-emerald-900/60 transition flex items-center justify-center gap-1" title="現在の試合のCSVを出力">
+                <span>📤</span>
+                <span class="truncate">CSV</span>
               </button>
             </div>
             <p id="save-status-msg" class="text-[10px] text-slate-400 text-center hidden"></p>
           </div>
 
           <!-- 保存済み試合一覧ヘッダー -->
-          <div class="flex items-center justify-between px-1 flex-shrink-0">
-            <span class="text-xs font-bold text-slate-300">保存済みの過去試合一覧</span>
-            <span class="text-[10px] text-slate-500">※新しい試合順</span>
+          <div class="flex items-center justify-between pt-1">
+            <span class="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+              <span>📚</span>
+              <span>保存済みの試合一覧</span>
+            </span>
+            <span id="saved-games-count" class="text-[10px] text-slate-500 font-mono font-bold">0試合</span>
           </div>
 
-          <!-- 過去試合カードリスト（スクロール領域） -->
-          <div id="archive-list-container" class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[160px]">
-            <div class="text-center text-slate-500 text-xs py-8">
+          <!-- 過去試合カードリスト受皿 -->
+          <div id="saved-games-list" class="space-y-2 min-h-[140px]">
+            <div class="text-center py-8 text-xs text-slate-500">
               読み込み中...
             </div>
           </div>
@@ -90,25 +102,92 @@ export class GameArchiveModalComponent {
 
       </div>
 
-      <!-- 削除確認モーダル（誤タップ防止） -->
-      <div id="archive-delete-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-60 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-rose-900/60 rounded-xl w-full max-w-xs p-3.5 shadow-2xl space-y-2.5">
+      <!-- 削除確認ダイアログ（2段階確認） -->
+      <div id="delete-confirm-dialog" class="hidden fixed inset-0 bg-black/80 z-60 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-rose-900/80 rounded-2xl w-full max-w-xs p-3.5 shadow-2xl space-y-2.5 animate-fadeIn">
           <div class="flex items-center gap-2 text-rose-400 border-b border-slate-800 pb-1.5">
-            <span>⚠️</span>
-            <span class="text-xs font-bold text-slate-100">試合データの削除</span>
+            <span class="text-base">⚠️</span>
+            <h4 class="font-black text-xs text-slate-200">過去試合の削除</h4>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
-            選択した試合をアーカイブから完全に削除しますか？<br>
-            <span class="text-rose-400 font-bold text-[10px]">※この操作は取り消せません。</span>
+            選択した試合データをアーカイブから完全に削除します。<br>
+            <span class="text-rose-400 font-bold">※この操作は元に戻せません。</span>
           </p>
           <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-800">
-            <button type="button" id="btn-cancel-archive-delete" class="px-2.5 py-1 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg hover:bg-slate-700">
+            <button type="button" id="btn-cancel-delete" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition">
               キャンセル
             </button>
-            <button type="button" id="btn-confirm-archive-delete" class="px-2.5 py-1 bg-rose-600 text-white text-xs font-bold rounded-lg hover:bg-rose-500 shadow">
-              削除する
+            <button type="button" id="btn-confirm-delete" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-black rounded-lg transition shadow">
+              削除実行
             </button>
           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  renderGameCard(game) {
+    const s = game.summary || {};
+    let winnerBadge = "";
+
+    if (s.winner === "away") {
+      winnerBadge = `<span class="bg-sky-950 text-sky-400 border border-sky-800/80 text-[9px] font-bold px-1.5 py-0.2 rounded">${s.awayTeamName} 勝利</span>`;
+    } else if (s.winner === "home") {
+      winnerBadge = `<span class="bg-amber-950 text-amber-400 border border-amber-800/80 text-[9px] font-bold px-1.5 py-0.2 rounded">${s.homeTeamName} 勝利</span>`;
+    } else {
+      winnerBadge = `<span class="bg-slate-800 text-slate-400 border border-slate-700 text-[9px] font-bold px-1.5 py-0.2 rounded">引き分け</span>`;
+    }
+
+    return `
+      <div class="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2.5 space-y-2 transition shadow" data-card-id="${game.id}">
+        <!-- 上段: 日付・大会名・勝敗バッジ -->
+        <div class="flex items-center justify-between text-[10px]">
+          <div class="flex items-center gap-1.5 text-slate-400 font-mono">
+            <span>📅</span>
+            <span class="text-slate-300 font-bold">${s.date || "-"}</span>
+            <span class="text-slate-600">|</span>
+            <span class="text-slate-400 truncate max-w-[130px] font-sans">${s.tournament || "公式戦"}</span>
+          </div>
+          <div>${winnerBadge}</div>
+        </div>
+
+        <!-- 中段: 対戦カード ＆ スコア表示 -->
+        <div class="flex items-center justify-between bg-slate-900/60 rounded-lg px-2.5 py-1.5 border border-slate-800/80">
+          <div class="flex-1 text-left truncate">
+            <span class="font-bold text-xs text-slate-200 block truncate">${s.awayTeamName}</span>
+            <span class="text-[9px] text-slate-500 font-sans">先攻</span>
+          </div>
+          
+          <!-- スコア -->
+          <div class="px-3 flex items-center gap-1.5 font-mono">
+            <span class="text-sm font-black ${s.awayScoreTotal > s.homeScoreTotal ? 'text-sky-400' : 'text-slate-300'}">${s.awayScoreTotal}</span>
+            <span class="text-xs text-slate-600">-</span>
+            <span class="text-sm font-black ${s.homeScoreTotal > s.awayScoreTotal ? 'text-amber-400' : 'text-slate-300'}">${s.homeScoreTotal}</span>
+          </div>
+
+          <div class="flex-1 text-right truncate">
+            <span class="font-bold text-xs text-slate-200 block truncate">${s.homeTeamName}</span>
+            <span class="text-[9px] text-slate-500 font-sans">後攻</span>
+          </div>
+        </div>
+
+        <!-- 下段: 操作アクションボタン群 -->
+        <div class="flex items-center justify-between gap-1.5 pt-0.5">
+          <button type="button" class="btn-card-scoresheet flex-1 py-1 px-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-amber-400 font-bold rounded-lg border border-amber-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}">
+            <span>📄</span>
+            <span>スコア表</span>
+          </button>
+          <button type="button" class="btn-card-resume flex-1 py-1 px-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-sky-400 font-bold rounded-lg border border-sky-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}">
+            <span>🔄</span>
+            <span>再開</span>
+          </button>
+          <button type="button" class="btn-card-csv py-1 px-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-emerald-400 font-bold rounded-lg border border-emerald-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}" title="この過去試合のCSVを出力">
+            <span>📤</span>
+            <span>CSV</span>
+          </button>
+          <button type="button" class="btn-card-delete py-1 px-2 bg-slate-900 hover:bg-rose-950/60 active:scale-95 text-rose-400 font-bold rounded-lg border border-rose-900/40 text-[11px] flex items-center justify-center transition" data-id="${game.id}" title="この試合を削除">
+            <span>🗑</span>
+          </button>
         </div>
       </div>
     `;
@@ -127,152 +206,62 @@ export class GameArchiveModalComponent {
       btnSave.addEventListener("click", () => this.handleSaveCurrentGame());
     }
 
+    // 現在の試合のCSV出力
+    const btnExportCurrent = this.container.querySelector("#btn-export-current-csv");
+    if (btnExportCurrent) {
+      btnExportCurrent.addEventListener("click", () => {
+        const state = this.gameState.getState();
+        const info = state.gameInfo || {};
+        DataExporter.exportGameCsv({
+          date: info.date || new Date().toISOString().slice(0, 10),
+          opponent: info.oppTeamName || "相手チーム",
+          history: state.history || []
+        });
+      });
+    }
+
     // 削除確認モーダルのキャンセル
-    const btnCancelDelete = this.container.querySelector("#btn-cancel-archive-delete");
-    if (btnCancelDelete) {
+    const btnCancelDelete = this.container.querySelector("#btn-cancel-delete");
+    const deleteDialog = this.container.querySelector("#delete-confirm-dialog");
+    if (btnCancelDelete && deleteDialog) {
       btnCancelDelete.addEventListener("click", () => {
-        const modal = this.container.querySelector("#archive-delete-confirm-modal");
-        if (modal) modal.classList.add("hidden");
-        this.selectedGameId = null;
+        deleteDialog.classList.add("hidden");
+        this.pendingDeleteId = null;
       });
     }
 
     // 削除確定
-    const btnConfirmDelete = this.container.querySelector("#btn-confirm-archive-delete");
-    if (btnConfirmDelete) {
-      btnConfirmDelete.addEventListener("click", () => this.handleDeleteConfirmed());
-    }
-  }
-
-  async open() {
-    this.updateCurrentGamePreview();
-    this.container.classList.remove("hidden");
-    await this.reloadGamesList();
-  }
-
-  close() {
-    this.container.classList.add("hidden");
-  }
-
-  updateCurrentGamePreview() {
-    const previewEl = this.container.querySelector("#current-game-quick-summary");
-    if (!previewEl) return;
-
-    const state = this.gameState.getState();
-    const info = state.gameInfo || {};
-    const teams = state.teams || {};
-
-    const awayScore = state.awayScore || [];
-    const homeScore = state.homeScore || [];
-    const awayTotal = awayScore.reduce((a, b) => a + (Number(b) || 0), 0);
-    const homeTotal = homeScore.reduce((a, b) => a + (Number(b) || 0), 0);
-
-    const awayName = (teams.away && teams.away.name) ? teams.away.name : (info.myTeamSide === "away" ? info.myTeamName : info.oppTeamName) || "先攻";
-    const homeName = (teams.home && teams.home.name) ? teams.home.name : (info.myTeamSide === "home" ? info.myTeamName : info.oppTeamName) || "後攻";
-
-    previewEl.textContent = `${awayName} ${awayTotal} - ${homeTotal} ${homeName} (${state.pitchCount || 0}球)`;
-  }
-
-  async reloadGamesList() {
-    const listContainer = this.container.querySelector("#archive-list-container");
-    const countBadge = this.container.querySelector("#archive-game-count");
-
-    try {
-      this.savedGames = await gameArchiveStore.getAllGames();
-
-      if (countBadge) {
-        countBadge.textContent = `${this.savedGames.length}件`;
-      }
-
-      if (!listContainer) return;
-
-      if (this.savedGames.length === 0) {
-        listContainer.innerHTML = `
-          <div class="text-center text-slate-500 text-xs py-8 bg-slate-950/40 rounded-xl border border-slate-800">
-            保存された過去試合はありません。<br>
-            上の「現在の試合を保存する」ボタンを押すとここに蓄積されます。
-          </div>
-        `;
-        return;
-      }
-
-      listContainer.innerHTML = this.savedGames.map((game) => this.renderGameCard(game)).join("");
-      this.bindCardEvents();
-    } catch (err) {
-      console.error("過去試合読み込み失敗:", err);
-      if (listContainer) {
-        listContainer.innerHTML = `
-          <div class="text-center text-rose-400 text-xs py-6">
-            過去試合の読み込みに失敗しました。
-          </div>
-        `;
-      }
-    }
-  }
-
-  renderGameCard(game) {
-    const s = game.summary || {};
-    const formattedDate = s.date || (game.savedAt ? game.savedAt.slice(0, 10) : "-");
-
-    // 勝敗バッジのスタイル定義
-    let resultBadge = `<span class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[10px] font-bold">引分</span>`;
-    if (s.winner === "away") {
-      resultBadge = `<span class="bg-sky-950 text-sky-300 border border-sky-800 px-1.5 py-0.5 rounded text-[10px] font-bold">${s.awayTeamName} 勝利</span>`;
-    } else if (s.winner === "home") {
-      resultBadge = `<span class="bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.5 rounded text-[10px] font-bold">${s.homeTeamName} 勝利</span>`;
+    const btnConfirmDelete = this.container.querySelector("#btn-confirm-delete");
+    if (btnConfirmDelete && deleteDialog) {
+      btnConfirmDelete.addEventListener("click", async () => {
+        if (this.pendingDeleteId) {
+          await gameArchiveStore.deleteGame(this.pendingDeleteId);
+          this.pendingDeleteId = null;
+          deleteDialog.classList.add("hidden");
+          await this.loadAndRenderSavedGames();
+        }
+      });
     }
 
-    return `
-      <div class="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2.5 space-y-2 transition shadow" data-game-id="${game.id}">
-        <!-- 上段: 日付・大会名・勝敗 -->
-        <div class="flex items-center justify-between text-xs">
-          <div class="flex items-center gap-1.5 text-slate-400 font-mono text-[11px]">
-            <span>📅 ${formattedDate}</span>
-            <span class="text-slate-600">|</span>
-            <span class="text-slate-300 font-sans font-bold truncate max-w-[120px] sm:max-w-[160px]">${s.tournament || "公式戦"}</span>
-          </div>
-          <div>${resultBadge}</div>
-        </div>
-
-        <!-- 中段: 対戦カード ＆ スコア表示 -->
-        <div class="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
-          <div class="flex items-center gap-2 flex-1 truncate">
-            <span class="font-bold text-slate-200 text-xs truncate max-w-[110px] sm:max-w-[150px]">${s.awayTeamName}</span>
-            <span class="text-slate-500 text-[10px]">vs</span>
-            <span class="font-bold text-slate-200 text-xs truncate max-w-[110px] sm:max-w-[150px]">${s.homeTeamName}</span>
-          </div>
-          <div class="flex items-baseline gap-1 font-mono font-black text-sm text-emerald-400 pl-2">
-            <span>${s.awayScoreTotal}</span>
-            <span class="text-slate-600 text-xs">-</span>
-            <span>${s.homeScoreTotal}</span>
-            <span class="text-[9px] text-slate-500 font-normal ml-1">(${s.totalPitches || 0}球)</span>
-          </div>
-        </div>
-
-        <!-- 下段: 操作アクションボタン群 -->
-        <div class="flex items-center justify-between gap-1.5 pt-0.5">
-          <button type="button" class="btn-card-scoresheet flex-1 py-1 px-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-amber-400 font-bold rounded-lg border border-amber-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}">
-            <span>📄</span>
-            <span>スコア表</span>
-          </button>
-          <button type="button" class="btn-card-resume flex-1 py-1 px-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-sky-400 font-bold rounded-lg border border-sky-900/40 text-[11px] flex items-center justify-center gap-1 transition" data-id="${game.id}">
-            <span>🔄</span>
-            <span>復元・再開</span>
-          </button>
-          <button type="button" class="btn-card-delete py-1 px-2.5 bg-slate-900 hover:bg-rose-950/60 active:scale-95 text-rose-400 font-bold rounded-lg border border-rose-900/40 text-[11px] flex items-center justify-center transition" data-id="${game.id}" title="この試合を削除">
-            <span>🗑</span>
-          </button>
-        </div>
-      </div>
-    `;
+    // 背景タップで閉じる
+    this.container.addEventListener("click", (e) => {
+      if (e.target === this.container) {
+        this.close();
+      }
+    });
   }
 
   bindCardEvents() {
     // スコア表閲覧
     this.container.querySelectorAll(".btn-card-scoresheet").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const gameId = btn.getAttribute("data-id");
-        this.handleViewScoreSheet(gameId);
+        const record = await gameArchiveStore.getGameById(gameId);
+        if (record && record.gameState) {
+          if (typeof this.options.onViewScoreSheet === "function") {
+            this.options.onViewScoreSheet(record.gameState);
+          }
+        }
       });
     });
 
@@ -284,54 +273,61 @@ export class GameArchiveModalComponent {
       });
     });
 
+    // 過去試合のCSV出力
+    this.container.querySelectorAll(".btn-card-csv").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const gameId = btn.getAttribute("data-id");
+        const record = await gameArchiveStore.getGameById(gameId);
+        if (!record || !record.gameState) return;
+        const gState = record.gameState;
+        const info = gState.gameInfo || {};
+        DataExporter.exportGameCsv({
+          date: info.date || (record.savedAt ? record.savedAt.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+          opponent: info.oppTeamName || (record.summary ? record.summary.homeTeamName : "相手チーム"),
+          history: gState.history || []
+        });
+      });
+    });
+
     // 削除確認モーダル展開
     this.container.querySelectorAll(".btn-card-delete").forEach((btn) => {
       btn.addEventListener("click", () => {
         const gameId = btn.getAttribute("data-id");
-        this.selectedGameId = gameId;
-        const modal = this.container.querySelector("#archive-delete-confirm-modal");
-        if (modal) modal.classList.remove("hidden");
+        this.pendingDeleteId = gameId;
+        const deleteDialog = this.container.querySelector("#delete-confirm-dialog");
+        if (deleteDialog) {
+          deleteDialog.classList.remove("hidden");
+        }
       });
     });
   }
 
   async handleSaveCurrentGame() {
     const statusMsg = this.container.querySelector("#save-status-msg");
-    const state = this.gameState.getState();
+    const saveBtn = this.container.querySelector("#btn-save-current-game");
 
     try {
-      if (statusMsg) {
-        statusMsg.classList.remove("hidden");
-        statusMsg.className = "text-[10px] text-amber-400 text-center";
-        statusMsg.textContent = "保存中...";
-      }
-
+      if (saveBtn) saveBtn.disabled = true;
+      const state = this.gameState.getState();
       await gameArchiveStore.saveGame(state);
 
       if (statusMsg) {
-        statusMsg.className = "text-[10px] text-emerald-400 text-center font-bold";
-        statusMsg.textContent = "✓ アーカイブに正常保存しました！";
+        statusMsg.textContent = "✓ アーカイブに保存しました";
+        statusMsg.className = "text-[10px] text-emerald-400 font-bold text-center block animate-pulse";
         setTimeout(() => {
-          statusMsg.classList.add("hidden");
-        }, 3000);
+          statusMsg.className = "hidden";
+        }, 2500);
       }
 
-      await this.reloadGamesList();
+      await this.loadAndRenderSavedGames();
     } catch (err) {
       console.error("試合保存失敗:", err);
       if (statusMsg) {
-        statusMsg.className = "text-[10px] text-rose-400 text-center font-bold";
-        statusMsg.textContent = "保存に失敗しました。";
+        statusMsg.textContent = "⚠️ 保存に失敗しました";
+        statusMsg.className = "text-[10px] text-rose-400 font-bold text-center block";
       }
-    }
-  }
-
-  async handleViewScoreSheet(gameId) {
-    const record = await gameArchiveStore.getGameById(gameId);
-    if (!record || !record.gameState) return;
-
-    if (typeof this.callbacks.onViewScoreSheet === "function") {
-      this.callbacks.onViewScoreSheet(record.gameState);
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
     }
   }
 
@@ -339,27 +335,68 @@ export class GameArchiveModalComponent {
     const record = await gameArchiveStore.getGameById(gameId);
     if (!record || !record.gameState) return;
 
-    // 現在記録中の試合を置き換える確認
-    const ok = window.confirm("この過去試合のデータを現在の画面に復元（再開）しますか？\n※現在の画面で未保存の内容は上書きされます。");
-    if (!ok) return;
-
-    if (typeof this.callbacks.onResumeGame === "function") {
-      this.callbacks.onResumeGame(record.gameState);
+    if (typeof this.options.onResumeGame === "function") {
+      this.options.onResumeGame(record.gameState);
       this.close();
     }
   }
 
-  async handleDeleteConfirmed() {
-    if (!this.selectedGameId) return;
+  async loadAndRenderSavedGames() {
+    const listContainer = this.container.querySelector("#saved-games-list");
+    const countBadge = this.container.querySelector("#saved-games-count");
+    if (!listContainer) return;
 
     try {
-      await gameArchiveStore.deleteGame(this.selectedGameId);
-      this.selectedGameId = null;
-      const modal = this.container.querySelector("#archive-delete-confirm-modal");
-      if (modal) modal.classList.add("hidden");
-      await this.reloadGamesList();
+      const games = await gameArchiveStore.getAllGames();
+      if (countBadge) countBadge.textContent = `${games.length}試合`;
+
+      if (games.length === 0) {
+        listContainer.innerHTML = `
+          <div class="text-center py-8 text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800/60 p-4 space-y-1">
+            <span class="text-xl block mb-1">📭</span>
+            <span>保存済みの過去試合はありません</span>
+            <p class="text-[10px] text-slate-600">試合終了後に上の「アーカイブに保存」を押すとここに蓄積されます</p>
+          </div>
+        `;
+        return;
+      }
+
+      listContainer.innerHTML = games.map((g) => this.renderGameCard(g)).join("");
+      this.bindCardEvents();
     } catch (err) {
-      console.error("試合削除失敗:", err);
+      console.error("過去試合一覧ロードエラー:", err);
+      listContainer.innerHTML = `
+        <div class="text-center py-6 text-xs text-rose-400 bg-rose-950/20 rounded-xl border border-rose-900/40">
+          データの読み込みに失敗しました
+        </div>
+      `;
     }
+  }
+
+  updateCurrentGameQuickSummary() {
+    const summaryEl = this.container.querySelector("#current-game-quick-summary");
+    if (!summaryEl) return;
+
+    const state = this.gameState.getState();
+    const info = state.gameInfo || {};
+    const teams = state.teams || {};
+
+    const awayName = (teams.away && teams.away.name) ? teams.away.name : (info.myTeamSide === "away" ? info.myTeamName : info.oppTeamName) || "先攻";
+    const homeName = (teams.home && teams.home.name) ? teams.home.name : (info.myTeamSide === "home" ? info.myTeamName : info.oppTeamName) || "後攻";
+
+    const awayScoreTotal = (state.awayScore || []).reduce((a, b) => a + (Number(b) || 0), 0);
+    const homeScoreTotal = (state.homeScore || []).reduce((a, b) => a + (Number(b) || 0), 0);
+
+    summaryEl.textContent = `${awayName} ${awayScoreTotal} - ${homeScoreTotal} ${homeName} (${state.inning || 1}回)`;
+  }
+
+  open() {
+    this.updateCurrentGameQuickSummary();
+    this.loadAndRenderSavedGames();
+    this.container.classList.remove("hidden");
+  }
+
+  close() {
+    this.container.classList.add("hidden");
   }
 }
