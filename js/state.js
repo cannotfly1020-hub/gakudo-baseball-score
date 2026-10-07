@@ -614,6 +614,25 @@ export class GameState {
   }
 
   /**
+   * 過去の特定の1球そのものを履歴から完全削除し、全体を全自動再計算
+   * （誤タップや余分なカウントを安全に抹消）
+   * @param {number} targetIndex - history 配列の対象インデックス
+   */
+  deletePitchHistory(targetIndex) {
+    if (!this.state.history || targetIndex < 0 || targetIndex >= this.state.history.length) {
+      return false;
+    }
+
+    // 対象の1球を配列から削除
+    this.state.history.splice(targetIndex, 1);
+
+    // 残りの全イベントで試合開始から高速リプレイ再計算
+    this.recalculateAllHistory();
+    this.notify();
+    return true;
+  }
+
+  /**
    * 全イベントを試合開始から高速リプレイし、盤面・カウント・スコア・球数を完全再計算
    * （DOM描画なし・純粋メモリ内JSオブジェクト演算で1ms未満で完了）
    */
