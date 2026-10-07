@@ -64,6 +64,10 @@
         <span>📄</span>
         <span class="truncate">スコア表</span>
       </button>
+      <button id="btn-finish-game" type="button" class="h-9 px-1 sm:px-2 bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white text-xs font-black rounded-lg border border-emerald-500 shadow flex items-center justify-center gap-1 transition" title="試合を確定してアーカイブへ保存">
+        <span>🏁</span>
+        <span class="truncate">試合終了</span>
+      </button>
       <button id="btn-open-archive" type="button" class="h-9 px-1 sm:px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-indigo-400 text-xs font-bold rounded-lg border border-indigo-900/50 flex items-center justify-center gap-1 shadow transition" title="保存済み過去試合一覧・アーカイブ">
         <span>📁</span>
         <span class="truncate">過去試合</span>
@@ -71,10 +75,6 @@
       <button id="btn-undo" type="button" class="h-9 px-1 sm:px-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1 shadow transition">
         <span>↺</span>
         <span class="truncate">1球取消</span>
-      </button>
-      <button id="btn-reset-game" type="button" class="h-9 px-1 sm:px-2 bg-rose-950/80 hover:bg-rose-900 active:scale-95 text-rose-300 text-xs font-bold rounded-lg border border-rose-800/80 flex items-center justify-center gap-1 shadow transition" title="試合を最初からやり直す">
-        <span>🗑</span>
-        <span class="truncate">リセット</span>
       </button>
     </div>
   </header>
@@ -126,6 +126,81 @@
 
   <!-- 【新設】絵で見る捕手スコア盤モーダルスロット -->
   <div id="catcher-modal-slot"></div>
+
+  <!-- 投球履歴ピンポイント修正モーダル受皿スロット -->
+  <div id="pitch-edit-modal-slot"></div>
+
+  <!-- 【新設】ゲームセット・試合終了確認モーダル（正式保存 ＆ 二重安全弁） -->
+  <div id="finish-game-modal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 select-none">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl p-4 sm:p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center justify-center text-lg font-black">
+            🏁
+          </span>
+          <div>
+            <div class="text-[9px] text-emerald-400 font-extrabold tracking-widest uppercase">GAME SET & ARCHIVE</div>
+            <h3 class="text-sm sm:text-base font-black text-white">ゲームセット（試合終了）の確認</h3>
+          </div>
+        </div>
+        <button type="button" id="btn-close-finish-modal" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold text-sm">
+          ✕
+        </button>
+      </div>
+
+      <!-- 最終対戦結果カード -->
+      <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 text-center space-y-1.5 shadow-inner">
+        <div class="text-[10px] font-bold text-slate-400 flex items-center justify-center gap-1.5">
+          <span>📅</span>
+          <span id="finish-summary-date">-</span>
+          <span>|</span>
+          <span id="finish-summary-tournament">公式戦</span>
+        </div>
+        <div class="flex items-center justify-around py-1">
+          <div class="w-28 text-right">
+            <div class="text-xs font-black text-white truncate" id="finish-team-away">先攻チーム</div>
+            <div class="text-[10px] text-slate-400">先攻</div>
+          </div>
+          <div class="flex items-baseline gap-1.5 font-mono">
+            <span class="text-2xl font-black text-emerald-400" id="finish-score-away">0</span>
+            <span class="text-slate-500 text-sm font-bold">─</span>
+            <span class="text-2xl font-black text-amber-400" id="finish-score-home">0</span>
+          </div>
+          <div class="w-28 text-left">
+            <div class="text-xs font-black text-white truncate" id="finish-team-home">後攻チーム</div>
+            <div class="text-[10px] text-slate-400">後攻</div>
+          </div>
+        </div>
+        <div class="text-[10px] font-bold text-slate-300 bg-slate-900/90 py-1 px-2 rounded-lg border border-slate-800" id="finish-pitch-count-info">
+          総投球数: 0球 | 試合時間: 0分
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed">
+        この試合の全投球履歴、打順、個人成績を<span class="text-emerald-400 font-bold">「過去試合アーカイブ」へ永久保存</span>します。<br>
+        <span class="text-[11px] text-slate-400">※保存完了後、メイン画面は新しい試合の準備状態に初期化されます。</span>
+      </p>
+
+      <!-- アクションボタン群 -->
+      <div class="space-y-2 pt-1 border-t border-slate-800">
+        <!-- メイン: 保存して終了 -->
+        <button type="button" id="btn-confirm-save-finish" class="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-1.5">
+          <span>💾</span>
+          <span>アーカイブに保存して試合終了</span>
+        </button>
+
+        <!-- サブボタングリッド -->
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="btn-cancel-finish" class="py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-bold rounded-xl transition text-center">
+            キャンセル（試合を続ける）
+          </button>
+          <button type="button" id="btn-discard-finish" class="py-2 bg-rose-950/40 hover:bg-rose-900/60 active:scale-95 text-rose-300 hover:text-white border border-rose-900/50 text-xs font-bold rounded-xl transition text-center" title="この試合データを保存せず破棄して初期化">
+            保存せず初期化
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- リセット確認ダイアログ（誤操作を完全に防ぐ2段階モーダル） -->
   <div id="reset-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 select-none">
