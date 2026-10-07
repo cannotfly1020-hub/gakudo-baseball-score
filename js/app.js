@@ -1,12 +1,14 @@
 /**
  * js/app.js
- * アプリ全体の司令塔（完全非同期・ゼロ遅延レスポンス版 ＆ 過去試合アーカイブ・捕手ボード統合）
+ * アプリ全体の司令塔
+ * （完全非同期・ゼロ遅延レスポンス版 ＆ 過去試合アーカイブ・捕手ボード・Wake Lock・炎天下モード統合）
  * 
- * 改善点:
+ * 機能強化:
+ * - 【現場過酷環境対策】Screen Wake Lock API による画面自動スリープ完全抑止（復帰時自動再取得付き）
+ * - 【熱暴走・直射日光防止】炎天下ペーパーホワイトモードのトグル制御 ＆ LocalStorage永続化
+ * - 【小学生捕手機能】絵で見る捕手スコア盤（CatcherVisualBoard）の完全統合
  * - データベース保存（IndexedDB）を完全非同期デバウンス化し、タップ直後の画面描画を一切ブロックしない
  * - processPlayResult 内の snapshot を createSnapshot に統一
- * - 過去試合アーカイブ管理モーダル（GameArchiveModalComponent）の全体統合
- * - 【新設】絵で見る捕手スコア盤コンポーネント（CatcherVisualBoard）の完全統合
  */
 
 import { GameState } from "./state.js";
@@ -33,10 +35,16 @@ class BaseballApp {
     this.gameArchiveModalComponent = null;
     this.catcherVisualBoardComponent = null;
     this.saveTimer = null;
+
+    // Screen Wake Lock インスタンス保持
+    this.wakeLockSentinel = null;
   }
 
   async init() {
     this.gameState = new GameState();
+
+    // 炎天下モードの前回状態を即時復元（初期描画チラつき防止）
+    this.initSunlightMode();
 
     const scoreboardSlot = document.getElementById("scoreboard-slot");
     const diamondSlot = document.getElementById("diamond-slot");
@@ -94,7 +102,7 @@ class BaseballApp {
       }
     }
 
-    // 【新設】絵で見る捕手スコア盤の安全な初期化
+    // 絵で見る捕手スコア盤の安全な初期化
     try {
       this.catcherVisualBoardComponent = new CatcherVisualBoard(this.gameState);
     } catch (err) {
@@ -143,6 +151,9 @@ class BaseballApp {
     this.bindGlobalActions();
     this.gameState.notify();
 
+    // 画面スリープ完全抑止（Wake Lock）の起動
+    this.initScreenWakeLock();
+
     // タップの反応を邪魔しない非同期デバウンス保存（UI描画を優先）
     this.gameState.subscribe((state) => {
       if (this.saveTimer) clearTimeout(this.saveTimer);
@@ -178,8 +189,82 @@ class BaseballApp {
     }
   }
 
+  async initScreenWakeLock() {
+    // Screen Wake Lock API がブラウザでサポートされているか確認
+    if (!("wakeLock" in navigator)) {
+      console.info("Screen Wake Lock API はこのブラウザでサポートされていません。");
+      return;
+    }
+
+    const requestLock = async () => {
+      try {
+        if (this.wakeLockSentinel && !this.wakeLockSentinel.released) {
+          return;
+        }
+        this.wakeLockSentinel = await navigator.wakeLock.request("screen");
+        this.wakeLockSentinel.addEventListener("release", () => {
+          this.wakeLockSentinel = null;
+        });
+        console.log("☀️ 画面スリープ抑止（Wake Lock）を取得しました。");
+      } catch (err) {
+        // バッテリー低下時やバックグラウンド時は例外が発生する可能性があるため安全に捕捉
+        console.warn("Wake Lock 取得スキップ:", err.message);
+      }
+    };
+
+    // 初回取得
+    await requestLock();
+
+    // タブ切り替えやアプリ復帰時に自動で再取得
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState === "visible") {
+        await requestLock();
+      }
+    });
+  }
+
+  initSunlightMode() {
+    const isSunlight = localStorage.getItem("gakudo_sunlight_mode") === "true";
+    if (isSunlight) {
+      document.body.classList.add("sunlight-mode");
+    }
+    this.updateSunlightButtonUI(isSunlight);
+  }
+
+  updateSunlightButtonUI(isActive) {
+    const btn = document.getElementById("btn-toggle-sunlight");
+    const label = document.getElementById("sunlight-btn-label");
+    if (!btn) return;
+
+    if (isActive) {
+      btn.classList.add("ring-2", "ring-amber-500", "bg-amber-100", "text-amber-950");
+      btn.classList.remove("bg-slate-800", "text-amber-300");
+      if (label) label.innerText = "標準";
+    } else {
+      btn.classList.remove("ring-2", "ring-amber-500", "bg-amber-100", "text-amber-950");
+      btn.classList.add("bg-slate-800", "text-amber-300");
+      if (label) label.innerText = "炎天下";
+    }
+  }
+
   bindGlobalActions() {
-    // 【新設】絵で見る捕手スコア盤 ワンタップ呼び出し
+    // 炎天下モードトグルボタン
+    const sunlightBtn = document.getElementById("btn-toggle-sunlight");
+    if (sunlightBtn) {
+      sunlightBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const willBeActive = !document.body.classList.contains("sunlight-mode");
+        document.body.classList.toggle("sunlight-mode", willBeActive);
+        try {
+          localStorage.setItem("gakudo_sunlight_mode", willBeActive ? "true" : "false");
+        } catch (err) {
+          console.warn("LocalStorage保存スキップ:", err);
+        }
+        this.updateSunlightButtonUI(willBeActive);
+      });
+    }
+
+    // 絵で見る捕手スコア盤 ワンタップ呼び出し
     const catcherBtn = document.getElementById("btn-open-catcher-board");
     if (catcherBtn) {
       catcherBtn.addEventListener("click", (e) => {
@@ -239,7 +324,6 @@ class BaseballApp {
       });
     }
 
-    // --- 試合リセット確認モーダルの制御 ---
     const resetOpenBtn = document.getElementById("btn-reset-game");
     const resetModal = document.getElementById("reset-confirm-modal");
     const resetCancelBtn = document.getElementById("btn-cancel-reset");
