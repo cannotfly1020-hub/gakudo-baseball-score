@@ -2,29 +2,41 @@
 / ==========================================================================
 Base CSS - gakudo-baseball-score
 天然芝・グラウンドを意識したダークテーマ、リセット、およびベースタイポグラフィ
-========================================================================== */:root {
+========================================================================== */
+
+:root {
 /* メインカラーパレット (通常ダークモード) */
 --bg-primary: #070d1e;
 --bg-panel: #0f172a;
 --bg-subpanel: #1e293b;
 --border-color: #334155;
---border-focus: #38bdf8;/* アクセントカラー */
+--border-focus: #38bdf8;
+
+/* アクセントカラー */
 --turf-green: #059669;
 --turf-dark: #064e3b;
 --gold-accent: #f59e0b;
 --strike-yellow: #facc15;
 --ball-green: #22c55e;
---out-red: #ef4444;/* テキストカラー */
+--out-red: #ef4444;
+
+/* テキストカラー */
 --text-main: #f8fafc;
 --text-muted: #94a3b8;
---text-sub: #cbd5e1;/* トランジション */
+--text-sub: #cbd5e1;
+
+/* トランジション */
 --transition-fast: 0.15s ease-out;
-}/* STREAMING_CHUNK:Styling reset rules and body setup /
+}
+
+/* STREAMING_CHUNK:Styling reset rules and body setup /
 / ボックスサイジングとスクロール動作 */
 *, *::before, *::after {
 box-sizing: border-box;
 -webkit-tap-highlight-color: transparent;
-}html, body {
+}
+
+html, body {
 margin: 0;
 padding: 0;
 background-color: var(--bg-primary);
@@ -34,11 +46,15 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica N
 -moz-osx-font-smoothing: grayscale;
 touch-action: manipulation;
 overscroll-behavior-y: none;
-}/* スマホ実機でのテキスト選択・ズーム誤動作防止 */
+}
+
+/* スマホ実機でのテキスト選択・ズーム誤動作防止 */
 body {
 user-select: none;
 -webkit-user-select: none;
-}/* STREAMING_CHUNK:Styling button feedback and scrollbars /
+}
+
+/* STREAMING_CHUNK:Styling button feedback and scrollbars /
 / ボタンの基本タッチフィードバック */
 button {
 cursor: pointer;
@@ -46,83 +62,193 @@ border: none;
 outline: none;
 font-family: inherit;
 transition: transform var(--transition-fast), filter var(--transition-fast), background-color var(--transition-fast);
-}button:active {
+}
+
+button:active {
 transform: scale(0.97);
-}/* スクロールバーのカスタマイズ（ダーク調） */
+}
+
+/* スクロールバーのカスタマイズ（ダーク調） */
 ::-webkit-scrollbar {
 width: 6px;
 height: 6px;
-}::-webkit-scrollbar-track {
+}
+
+::-webkit-scrollbar-track {
 background: var(--bg-primary);
-}::-webkit-scrollbar-thumb {
+}
+
+::-webkit-scrollbar-thumb {
 background: var(--border-color);
 border-radius: 9999px;
-}::-webkit-scrollbar-thumb:hover {
+}
+
+::-webkit-scrollbar-thumb:hover {
 background: #475569;
-}/* STREAMING_CHUNK:Styling sunlight paper-white mode rules /
+}
+
+/* STREAMING_CHUNK:Comprehensive sunlight mode overrides for all components /
 / ==========================================================================
-【炎天下ペーパーホワイトモード】 (Sunlight High-Contrast Mode)
-真夏の直射日光・気温35℃以上の河川敷グラウンド用。
-端末の発熱（ブラックアウト）を抑え、反射下でも極太黒字でくっきり読めるE-Ink調配色。
-========================================================================== */body.sunlight-mode {
-background-color: #ffffff !important;
-color: #000000 !important;
-}body.sunlight-mode header,
+【炎天下ペーパーホワイトモード】 (Sunlight High-Contrast Mode 完全統合版)
+直射日光下・強い反射下でも「白地背景 × 極太墨文字 × くっきり枠線」で確実に読めるE-Ink調配色
+========================================================================== */
+
+/* 1. ページ全体・コンテナ・カードの白地化 */
+body.sunlight-mode {
+background-color: #f8fafc !important;
+color: #0f172a !important;
+}
+
+body.sunlight-mode header,
 body.sunlight-mode main,
 body.sunlight-mode section,
-body.sunlight-mode .bg-$$\#0b1329$$,
-body.sunlight-mode .bg-slate-900,
-body.sunlight-mode .bg-slate-950,
-body.sunlight-mode .bg-slate-900/80,
-body.sunlight-mode .bg-slate-900/90,
-body.sunlight-mode .bg-slate-900/95 {
+body.sunlight-mode div:not(.bs-dot):not(.count-lamp),
+body.sunlight-mode table,
+body.sunlight-mode thead,
+body.sunlight-mode tbody,
+body.sunlight-mode tr,
+body.sunlight-mode th,
+body.sunlight-mode td {
+border-color: #cbd5e1 !important;
+}
+
+/* 2. 暗色背景クラス（Tailwind）の完全白地反転 /
+body.sunlight-mode [class="bg-[#0b1329]"],
+body.sunlight-mode [class*="bg-slate-950"],
+body.sunlight-mode [class*="bg-slate-900"],
+body.sunlight-mode [class*="bg-slate-900/"],
+body.sunlight-mode [class*="bg-slate-950/"] {
 background-color: #ffffff !important;
-color: #000000 !important;
-border-color: #0f172a !important;
-}/* パネル・カードの白地＆高コントラスト枠線化 */
-body.sunlight-mode .bg-slate-800,
-body.sunlight-mode .bg-slate-800/90,
-body.sunlight-mode .bg-slate-800/70,
-body.sunlight-mode .bg-slate-800/30 {
+color: #0f172a !important;
+border-color: #94a3b8 !important;
+}
+
+body.sunlight-mode [class*="bg-slate-800"],
+body.sunlight-mode [class*="bg-slate-800/"],
+body.sunlight-mode [class*="bg-slate-700"],
+body.sunlight-mode [class*="bg-slate-700/"] {
 background-color: #f1f5f9 !important;
-color: #000000 !important;
-border-color: #334155 !important;
-}/* STREAMING_CHUNK:Refining text contrast for sunlight mode /
-/ テキストカラーの極太墨黒化 */
-body.sunlight-mode .text-slate-100,
-body.sunlight-mode .text-slate-200,
-body.sunlight-mode .text-slate-300,
-body.sunlight-mode .text-white {
-color: #000000 !important;
-font-weight: 800 !important;
-}body.sunlight-mode .text-slate-400,
-body.sunlight-mode .text-slate-500 {
-color: #334155 !important;
+color: #0f172a !important;
+border-color: #94a3b8 !important;
+}
+
+/* 3. テキストの墨黒化＆極太化 /
+body.sunlight-mode [class="text-slate-100"],
+body.sunlight-mode [class*="text-slate-200"],
+body.sunlight-mode [class*="text-slate-300"],
+body.sunlight-mode [class*="text-white"],
+body.sunlight-mode h1,
+body.sunlight-mode h2,
+body.sunlight-mode h3,
+body.sunlight-mode span,
+body.sunlight-mode p {
+color: #0f172a !important;
 font-weight: 700 !important;
-}/* 境界線・区切り線のくっきり強調 */
-body.sunlight-mode .border-slate-800,
-body.sunlight-mode .border-slate-700,
-body.sunlight-mode .border-slate-800/80,
-body.sunlight-mode .border-slate-800/60 {
-border-color: #0f172a !important;
-}/* STREAMING_CHUNK:Enhancing status badges and indicators under direct sunlight /
-/ 直射日光下でのカウント・ボタン視認性向上 */
-body.sunlight-mode .bg-emerald-400,
-body.sunlight-mode .text-emerald-400 {
-color: #047857 !important;
-}body.sunlight-mode .bg-amber-400,
-body.sunlight-mode .text-amber-400,
-body.sunlight-mode .text-amber-300 {
-color: #b45309 !important;
-}body.sunlight-mode .text-sky-400,
-body.sunlight-mode .text-sky-300 {
-color: #0369a1 !important;
-}body.sunlight-mode .text-rose-400,
-body.sunlight-mode .text-rose-300 {
-color: #be123c !important;
-}/* 炎天下モード時のスクロールバー */
+}
+
+body.sunlight-mode [class*="text-slate-400"],
+body.sunlight-mode [class*="text-slate-500"] {
+color: #334155 !important;
+font-weight: 600 !important;
+}
+
+/* 4. スコアボード & テーブルの視認性向上 */
+body.sunlight-mode #scoreboard-slot table {
+background-color: #ffffff !important;
+border: 2px solid #0f172a !important;
+}
+
+body.sunlight-mode #scoreboard-slot th {
+background-color: #e2e8f0 !important;
+color: #0f172a !important;
+font-weight: 900 !important;
+border: 1px solid #94a3b8 !important;
+}
+
+body.sunlight-mode #scoreboard-slot td {
+background-color: #ffffff !important;
+color: #0f172a !important;
+font-weight: 800 !important;
+border: 1px solid #cbd5e1 !important;
+}
+
+/* STREAMING_CHUNK:Refining buttons and controls in sunlight mode /
+/ 5. 走者ダイアモンド・BSO・アクションボタンの白地×太枠線化 */
+body.sunlight-mode button {
+border-color: #64748b !important;
+}
+
+/* 一般ボタン（濃紺系など）を白地＋濃い枠線ボタンへ /
+body.sunlight-mode button[class="bg-slate-800"],
+body.sunlight-mode button[class*="bg-slate-900"],
+body.sunlight-mode button[class*="bg-slate-700"] {
+background-color: #ffffff !important;
+color: #0f172a !important;
+border: 1.5px solid #475569 !important;
+box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+font-weight: 800 !important;
+}
+
+body.sunlight-mode button[class*="bg-slate-800"]:active,
+body.sunlight-mode button[class*="bg-slate-900"]:active {
+background-color: #e2e8f0 !important;
+}
+
+/* 6. BSO カウントランプ（消灯・点灯を直射日光下で明確化） */
+body.sunlight-mode .bso-lamp,
+body.sunlight-mode [data-count-lamp] {
+border: 1.5px solid #475569 !important;
+}
+
+/* 7. コース選択ゾーン（ストライク枠とボール枠の視認性） */
+body.sunlight-mode #zone-slot button,
+body.sunlight-mode .zone-cell {
+background-color: #ffffff !important;
+color: #0f172a !important;
+border: 1.5px solid #64748b !important;
+font-weight: 900 !important;
+}
+
+body.sunlight-mode .zone-cell.strike-zone {
+background-color: #fef3c7 !important; /* ストライク枠内は薄い黄色地 */
+border: 2px solid #b45309 !important;
+}
+
+body.sunlight-mode .zone-cell:hover,
+body.sunlight-mode .zone-cell:active {
+background-color: #cbd5e1 !important;
+}
+
+/* 8. カラーアクセント（白地でもはっきり読める濃色へ補正） /
+body.sunlight-mode [class="text-emerald-400"],
+body.sunlight-mode [class*="text-emerald-300"] {
+color: #047857 !important; /* 濃いエメラルド */
+font-weight: 800 !important;
+}
+
+body.sunlight-mode [class*="text-amber-400"],
+body.sunlight-mode [class*="text-amber-300"] {
+color: #b45309 !important; /* 濃いアンバー */
+font-weight: 800 !important;
+}
+
+body.sunlight-mode [class*="text-sky-400"],
+body.sunlight-mode [class*="text-sky-300"] {
+color: #0369a1 !important; /* 濃いブルー */
+font-weight: 800 !important;
+}
+
+body.sunlight-mode [class*="text-rose-400"],
+body.sunlight-mode [class*="text-rose-300"] {
+color: #be123c !important; /* 濃いレッド */
+font-weight: 800 !important;
+}
+
+/* 9. スクロールバー（炎天下モード用） */
 body.sunlight-mode::-webkit-scrollbar-track {
-background: #f8fafc;
-}body.sunlight-mode::-webkit-scrollbar-thumb {
-background: #64748b;
+background: #f1f5f9;
+}
+
+body.sunlight-mode::-webkit-scrollbar-thumb {
+background: #94a3b8;
 }
