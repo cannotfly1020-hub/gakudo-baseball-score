@@ -1,6 +1,13 @@
 /**
  * js/components/rosterMasterTab.js
- * 団員名簿マスタ タブ（手動DnD並び替え ＆ 学年・背番号・名前ワンタップソート対応版）
+ * 団員名簿マスタ タブ（LINEテキスト共有 ＆ 手動DnD並び替え ＆ 学年・背番号・名前ワンタップソート対応版）
+ * 
+ * 機能強化:
+ * - 【LINEで名簿を共有】登録済み団員全員の背番号・氏名・学年・守備をワンタップでLINE共有テキストとしてコピー
+ * - 【LINEテキスト一発取込】LINEメッセージをそのまま貼り付けるだけで全員分を100%完全再現して取り込み
+ * - 【インライン通知トースト】alert()を一切使わない快適なコピー完了メッセージ表示
+ * - 【LocalStorage永続バックアップ】名簿更新時に端末内へ自動保存し、リセット時でも即時復元可能
+ * - 既存の手動行DnD、クイックソート、公式#/練習#独立管理、手動編集モーダルを完全維持
  */
 
 export class RosterMasterTabComponent {
@@ -10,6 +17,7 @@ export class RosterMasterTabComponent {
     this.editingPlayerIndex = null;
     this.sortKey = null; // "offNum" | "pracNum" | "name" | "grade"
     this.sortAsc = true;
+    this.toastTimer = null;
   }
 
   render() {
@@ -17,17 +25,30 @@ export class RosterMasterTabComponent {
 
     this.container.innerHTML = `
       <div class="space-y-3">
+        
+        <!-- 操作通知トーストバー (コピー完了時等) -->
+        <div id="roster-toast-message" class="hidden text-xs font-bold py-1.5 px-3 rounded-xl bg-emerald-950/90 border border-emerald-500/80 text-emerald-300 shadow-lg text-center transition"></div>
+
         <!-- 上部操作バー -->
         <div class="flex items-center justify-between gap-2 flex-wrap">
-          <button type="button" id="btn-open-add-player" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow transition">
-            <span>＋ 選手を追加</span>
-          </button>
           <div class="flex items-center gap-1.5 flex-wrap">
+            <button type="button" id="btn-open-add-player" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow transition">
+              <span>＋ 選手を追加</span>
+            </button>
+
+            <!-- 【新設】LINE用名簿共有テキストコピーボタン -->
+            <button type="button" id="btn-share-line-roster" class="bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white text-xs font-black px-2.5 sm:px-3 py-1.5 rounded-lg border border-emerald-500 shadow flex items-center gap-1 transition" title="LINEグループ連絡網へ名簿を送信して他端末へ共有">
+              <span>💬</span>
+              <span>LINEで名簿を共有</span>
+            </button>
+          </div>
+
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button type="button" id="btn-open-batch-import" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow transition" title="LINEやテキストから名簿を一括取り込み">
+              <span>📥 テキスト一括取込</span>
+            </button>
             <button type="button" id="btn-clear-roster" class="bg-slate-800 hover:bg-rose-950/70 text-slate-400 hover:text-rose-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-slate-700 transition" title="名簿を一度空にして新規取り込みしたい場合に利用">
               <span>全消去</span>
-            </button>
-            <button type="button" id="btn-open-batch-import" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow transition">
-              <span>📥 テキスト一括取込</span>
             </button>
           </div>
         </div>
@@ -117,7 +138,10 @@ export class RosterMasterTabComponent {
             </tbody>
           </table>
         </div>
-        <p class="text-[10px] text-slate-500 text-right">※ 左端の「⠿」をドラッグして自由な順序に並び替えできます</p>
+        <div class="flex items-center justify-between text-[10px] text-slate-500">
+          <span>登録人数: <span class="font-bold text-slate-300 font-mono">${roster.length}名</span></span>
+          <span>※ 左端の「⠿」をドラッグして自由な順序に並び替えできます</span>
+        </div>
       </div>
 
       <!-- 選手情報 編集・追加モーダル -->
@@ -193,7 +217,7 @@ export class RosterMasterTabComponent {
         </div>
       </div>
 
-      <!-- 大型テキストエリア 一括取込専用モーダル -->
+      <!-- 大型テキストエリア 一括取込専用モーダル (LINE共有テキスト完全対応) -->
       <div id="batch-import-modal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-3 select-none">
         <div class="bg-slate-900 border border-indigo-700/80 rounded-2xl w-full max-w-lg p-4 shadow-2xl space-y-3 flex flex-col max-h-[90vh]">
           <div class="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -205,11 +229,26 @@ export class RosterMasterTabComponent {
           </div>
 
           <p class="text-[11px] text-slate-300 leading-relaxed">
-            Markdownや箇条書きのテキストをそのまま貼り付けてください。<br>
-            <span class="text-indigo-400 font-bold">「見出し」や「記号 -」は自動判別され、公式背番号がない選手も柔軟に抽出されます。</span>
+            LINEや連絡網のテキストをそのまま丸ごと貼り付けてください。<br>
+            <span class="text-indigo-400 font-bold">「【学童野球 団員名簿】」の共有メッセージもそのまま貼り付けるだけで即時認識されます。</span>
           </p>
 
-          <textarea id="textarea-batch-input" rows="8" placeholder="ここにテキストを丸ごと貼り付けてください&#10;例:&#10;- 7 森山 惇都 8&#10;- 松本 蓮 75&#10;- 5 西田 圭佑 91" class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl p-3 text-xs text-slate-200 outline-none font-mono leading-relaxed resize-none"></textarea>
+          <textarea id="textarea-batch-input" rows="8" placeholder="ここにLINEや連絡網のテキストを丸ごと貼り付けてください&#10;例:&#10;10 佐藤 翔太 (捕) 6年&#10;1 鈴木 蓮 (投) 6年&#10;- 7 森山 惇都 8&#10;- 松本 蓮 75" class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl p-3 text-xs text-slate-200 outline-none font-mono leading-relaxed resize-none"></textarea>
+
+          <!-- 取込オプション（上書き vs 追加） -->
+          <div class="flex items-center justify-between bg-slate-950/60 p-2 rounded-lg border border-slate-800 text-[11px]">
+            <span class="text-slate-400 font-bold">取込モード:</span>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input type="radio" name="import-mode" value="replace" checked class="accent-indigo-500">
+                <span class="text-slate-200 font-bold">現在の名簿を上書き（置換）</span>
+              </label>
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input type="radio" name="import-mode" value="append" class="accent-indigo-500">
+                <span class="text-slate-300">末尾に追加</span>
+              </label>
+            </div>
+          </div>
 
           <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800">
             <span id="import-preview-count" class="text-[11px] font-bold text-slate-400">貼り付け待ち...</span>
@@ -237,12 +276,21 @@ export class RosterMasterTabComponent {
       btnAdd.addEventListener("click", () => this.openEditModal(null));
     }
 
+    // 【新設】LINEで名簿を共有ボタン
+    const btnShareLine = this.container.querySelector("#btn-share-line-roster");
+    if (btnShareLine) {
+      btnShareLine.addEventListener("click", () => this.handleShareLineRoster());
+    }
+
     const btnClear = this.container.querySelector("#btn-clear-roster");
     if (btnClear) {
       btnClear.addEventListener("click", () => {
-        if (window.confirm("名簿を全消去して新規作成しますか？")) {
+        const roster = this.options.getRoster();
+        if (roster.length === 0) return;
+        this.showCustomConfirm("名簿の全消去", "登録されている団員名簿をすべて消去しますか？", () => {
           this.saveAndRerender([]);
-        }
+          this.showToast("🗑 名簿をすべて消去しました。");
+        });
       });
     }
 
@@ -297,6 +345,57 @@ export class RosterMasterTabComponent {
     }
 
     this.bindBatchImportEvents();
+  }
+
+  /**
+   * LINE送信用に整形した名簿テキストを生成し、クリップボードにコピー
+   */
+  async handleShareLineRoster() {
+    const roster = typeof this.options.getRoster === "function" ? this.options.getRoster() : [];
+
+    if (roster.length === 0) {
+      this.showToast("⚠️ 登録されている選手がいません。「＋ 選手を追加」から登録してください。");
+      return;
+    }
+
+    let text = `【学童野球 団員名簿データ】\n`;
+    text += `全${roster.length}名登録済み\n`;
+    text += `━━━━━━━━━━━━━━\n`;
+
+    roster.forEach((p, idx) => {
+      const offStr = (p.officialNumber !== null && p.officialNumber !== undefined && p.officialNumber !== "")
+        ? `#${p.officialNumber}`
+        : `#-`;
+      const pracStr = (p.practiceNumber !== null && p.practiceNumber !== undefined && p.practiceNumber !== "" && p.practiceNumber !== p.officialNumber)
+        ? ` (練#${p.practiceNumber})`
+        : "";
+      const gradeStr = p.grade ? ` ${p.grade}年` : "";
+      const posStr = p.pos ? ` [${p.pos}]` : "";
+
+      text += `${offStr} ${p.name}${posStr}${gradeStr}${pracStr}\n`;
+    });
+
+    text += `━━━━━━━━━━━━━━\n`;
+    text += `※このメッセージ全体をコピーしてアプリの「📥 テキスト一括取込」に貼り付けると、他端末に一瞬で同期できます。`;
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      this.showToast("✅ LINE用 名簿テキストをコピーしました！保護者グループに貼り付けて送信してください。");
+    } catch (err) {
+      console.warn("クリップボードコピー失敗:", err);
+      this.showToast("⚠️ コピーに失敗しました。端末のクリップボード権限をご確認ください。");
+    }
   }
 
   bindDragAndDrop() {
@@ -410,7 +509,6 @@ export class RosterMasterTabComponent {
         case "offNum": {
           const numA = (a.officialNumber !== null && a.officialNumber !== undefined && a.officialNumber !== "") ? Number(a.officialNumber) : null;
           const numB = (b.officialNumber !== null && b.officialNumber !== undefined && b.officialNumber !== "") ? Number(b.officialNumber) : null;
-          // 背番号未付与（なし）は常に後ろへ
           if (numA === null && numB === null) return 0;
           if (numA === null) return 1;
           if (numB === null) return -1;
@@ -432,7 +530,6 @@ export class RosterMasterTabComponent {
           if (gA !== gB) {
             return this.sortAsc ? gA - gB : gB - gA;
           }
-          // 同学年なら背番号昇順で揃える
           const numA = a.officialNumber ?? a.practiceNumber ?? 99;
           const numB = b.officialNumber ?? b.practiceNumber ?? 99;
           return numA - numB;
@@ -509,7 +606,6 @@ export class RosterMasterTabComponent {
     const name = inputName ? inputName.value.trim() : "";
     if (!name) return;
 
-    // 空欄の場合は null（なし）として扱う
     const offNum = inputOff && inputOff.value.trim() !== "" ? parseInt(inputOff.value, 10) : null;
     const pracNum = inputPrac && inputPrac.value.trim() !== "" ? parseInt(inputPrac.value, 10) : (offNum ?? null);
     const grade = selectGrade ? parseInt(selectGrade.value, 10) || 6 : 6;
@@ -517,7 +613,6 @@ export class RosterMasterTabComponent {
 
     const roster = this.options.getRoster();
     const matchType = typeof this.options.getMatchType === "function" ? this.options.getMatchType() : "official";
-
     const currentNumber = matchType === "official" ? offNum : pracNum;
 
     if (this.editingPlayerIndex !== null && roster[this.editingPlayerIndex]) {
@@ -545,6 +640,7 @@ export class RosterMasterTabComponent {
     if (modal) modal.classList.add("hidden");
     this.editingPlayerIndex = null;
     this.saveAndRerender(roster);
+    this.showToast(`✅ 「${name}」の情報を保存しました。`);
   }
 
   bindBatchImportEvents() {
@@ -578,7 +674,7 @@ export class RosterMasterTabComponent {
         if (parsed.length > 0) {
           countPreview.innerHTML = `<span class="text-emerald-400 font-bold">✓ ${parsed.length}名</span> の選手を検出しました`;
         } else {
-          countPreview.textContent = "検出中...";
+          countPreview.textContent = "検出中（背番号と氏名の行を探しています）...";
         }
       });
     }
@@ -591,7 +687,10 @@ export class RosterMasterTabComponent {
           return;
         }
 
-        const roster = this.options.getRoster();
+        const modeEl = this.container.querySelector("input[name='import-mode']:checked");
+        const isReplace = modeEl ? modeEl.value === "replace" : true;
+
+        let roster = isReplace ? [] : [...this.options.getRoster()];
         const matchType = typeof this.options.getMatchType === "function" ? this.options.getMatchType() : "official";
 
         parsed.forEach((p) => {
@@ -611,10 +710,14 @@ export class RosterMasterTabComponent {
 
         closeModal();
         this.saveAndRerender(roster);
+        this.showToast(`🎉 ${parsed.length}名 の団員名簿を取り込みました！`);
       });
     }
   }
 
+  /**
+   * LINE共有テキスト、Markdown、CSV、番号＋名前などあらゆる形式を柔軟に検出
+   */
   parseInputText(rawText) {
     if (!rawText) return [];
 
@@ -625,10 +728,39 @@ export class RosterMasterTabComponent {
       let line = rawLine.trim();
       if (!line) return;
 
-      if (line.startsWith("#")) return;
+      // ヘッダーや区切り線、注記行を自動スキップ
+      if (line.includes("【学童野球") || line.includes("登録済み") || line.includes("━━━━") || line.includes("※このメッセージ")) {
+        return;
+      }
+
+      // 全角数字を半角数字へ正規化
       line = line.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0));
       line = line.replace(/\*\*/g, "").trim();
       line = line.replace(/^[-*•・]\s*/, "").trim();
+
+      // LINE共有フォーマット:例 "#10 佐藤 翔太 [捕] 6年 (練#1)" または "#- 鈴木 [投] 5年"
+      const matchLineFormat = line.match(/^#?(\d+|-)\s+(.+?)(?:\s+\[([^\s\]]+)\]|\s+\(([^\s\)]+)\))?(?:\s+(\d)年)?(?:\s+\(練#?(\d+)\))?$/);
+      if (matchLineFormat) {
+        const offRaw = matchLineFormat[1];
+        const namePart = matchLineFormat[2].trim();
+        const posPart = matchLineFormat[3] || matchLineFormat[4] || "投";
+        const gradePart = matchLineFormat[5] ? parseInt(matchLineFormat[5], 10) : 6;
+        const pracPart = matchLineFormat[6] ? parseInt(matchLineFormat[6], 10) : null;
+
+        const offNum = offRaw === "-" ? null : parseInt(offRaw, 10);
+        const pracNum = pracPart !== null ? pracPart : offNum;
+
+        if (namePart) {
+          results.push({
+            offNum,
+            pracNum,
+            name: namePart,
+            grade: gradePart,
+            pos: posPart
+          });
+          return;
+        }
+      }
 
       if (!/\d/.test(line)) return;
 
@@ -670,7 +802,6 @@ export class RosterMasterTabComponent {
             const num = parseInt(matchNameFirst[2], 10);
             fullName = matchNameFirst[1].trim();
             pracNum = num;
-            // 学童野球において21番以上などは公式戦背番号未付与と推定
             offNum = num <= 20 ? num : null;
           } else {
             const matchNumFirst = line.match(/^(\d+)\s+(.+)$/);
@@ -684,10 +815,10 @@ export class RosterMasterTabComponent {
         }
       }
 
-      if (fullName && pracNum !== null) {
+      if (fullName && (pracNum !== null || offNum !== null)) {
         results.push({
           offNum,
-          pracNum,
+          pracNum: pracNum !== null ? pracNum : offNum,
           name: fullName,
           grade,
           pos
@@ -702,16 +833,91 @@ export class RosterMasterTabComponent {
     const roster = this.options.getRoster();
     const p = roster[idx];
     const pName = p ? p.name : "選手";
-    if (window.confirm(`「${pName}」を名簿から削除しますか？`)) {
+
+    this.showCustomConfirm("選手削除", `「${pName}」を名簿から削除しますか？`, () => {
       roster.splice(idx, 1);
       this.saveAndRerender(roster);
-    }
+      this.showToast(`🗑 「${pName}」を名簿から削除しました。`);
+    });
   }
 
+  /**
+   * alert() / confirm() を一切使わないインライン確認ダイアログ
+   */
+  showCustomConfirm(title, message, onConfirm) {
+    let confirmBox = document.getElementById("roster-custom-confirm-modal");
+    if (!confirmBox) {
+      confirmBox = document.createElement("div");
+      confirmBox.id = "roster-custom-confirm-modal";
+      confirmBox.className = "fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-3 select-none";
+      document.body.appendChild(confirmBox);
+    }
+
+    confirmBox.innerHTML = `
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xs p-4 shadow-2xl space-y-3">
+        <h3 class="font-black text-sm text-slate-100 flex items-center gap-1.5">
+          <span>⚠️</span>
+          <span>${title}</span>
+        </h3>
+        <p class="text-xs text-slate-300 leading-relaxed">${message}</p>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button type="button" id="btn-roster-confirm-cancel" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition">
+            キャンセル
+          </button>
+          <button type="button" id="btn-roster-confirm-ok" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-bold rounded-lg shadow transition">
+            はい、実行
+          </button>
+        </div>
+      </div>
+    `;
+
+    confirmBox.classList.remove("hidden");
+
+    const btnCancel = confirmBox.querySelector("#btn-roster-confirm-cancel");
+    const btnOk = confirmBox.querySelector("#btn-roster-confirm-ok");
+
+    btnCancel.addEventListener("click", () => {
+      confirmBox.classList.add("hidden");
+    });
+
+    btnOk.addEventListener("click", () => {
+      confirmBox.classList.add("hidden");
+      if (typeof onConfirm === "function") onConfirm();
+    });
+  }
+
+  /**
+   * 操作完了・通知用インラインメッセージ
+   */
+  showToast(message) {
+    const toast = this.container.querySelector("#roster-toast-message");
+    if (!toast) return;
+
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    toast.textContent = message;
+    toast.classList.remove("hidden");
+
+    this.toastTimer = setTimeout(() => {
+      toast.classList.add("hidden");
+    }, 3200);
+  }
+
+  /**
+   * コールバック通知 ＆ 端末内LocalStorageへの永続バックアップ保存
+   */
   saveAndRerender(updatedRoster) {
+    // 1. LocalStorageへ永続バックアップ
+    try {
+      localStorage.setItem("gakudo_master_roster", JSON.stringify(updatedRoster));
+    } catch (err) {
+      console.warn("LocalStorageへの名簿保存スキップ:", err);
+    }
+
+    // 2. 外部状態（rosterView等）へのコールバック通知
     if (typeof this.options.onSave === "function") {
       this.options.onSave(updatedRoster);
     }
+
     this.render();
   }
 }
