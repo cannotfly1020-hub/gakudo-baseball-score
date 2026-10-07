@@ -1,6 +1,6 @@
 /**
  * js/components/runnerDiamond.js
- * 走者ダイアモンド ＆ BSOランプコンポーネント（本塁向き修正 ＆ 指先大型判定対応）
+ * 走者ダイアモンド ＆ BSOランプコンポーネント（例外・珍プレー完全対応版）
  * 
  * 担当役割:
  * - BSOランプ（ボール:緑3 / ストライク:黄2 / アウト:赤2）の点灯管理
@@ -9,6 +9,7 @@
  * - 得点クイック補正ポップオーバー（＋1点 / −1点）
  * - 現在の打者・投手情報の表示
  * - 走者の有無に応じた走塁ボタン（盗塁、盗塁刺、暴投、牽制死）の自動活性・非活性制御
+ * - 【ステップ3】学童頻出例外・珍プレー（ボーク、打撃妨害、振り逃げ詳細進塁）操作の完全統合
  * - 直近投球ログスロット（#log-slot）の自動更新
  */
 
@@ -142,7 +143,7 @@ export class RunnerDiamondComponent {
 
       </div>
 
-      <!-- 走塁・野手ワンタップイベントバー -->
+      <!-- 1. 走塁・野手ワンタップイベントバー -->
       <div class="grid grid-cols-4 gap-1.5 mt-2">
         <button type="button" id="btn-runner-steal" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold py-1.5 rounded-lg text-[11px] border border-slate-700 shadow flex items-center justify-center gap-1 transition">
           <span>🏃 盗塁</span>
@@ -155,6 +156,73 @@ export class RunnerDiamondComponent {
         </button>
         <button type="button" id="btn-runner-pickoff" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold py-1.5 rounded-lg text-[11px] border border-slate-700 shadow flex items-center justify-center gap-1 transition">
           <span>🎯 牽制死</span>
+        </button>
+      </div>
+
+      <!-- 2. 【ステップ3新設】学童野球 例外・特殊プレー対応バー -->
+      <div class="grid grid-cols-3 gap-1.5 mt-1.5 pt-1.5 border-t border-slate-800/80">
+        <!-- ボークボタン -->
+        <button type="button" id="btn-special-balk" class="bg-slate-900 hover:bg-slate-800 active:scale-95 text-rose-300 font-bold py-1 rounded-lg text-[10px] border border-rose-900/40 shadow flex items-center justify-center gap-1 transition" title="走者全員を1塁進塁（カウント不変）">
+          <span>⚠️ ボーク</span>
+        </button>
+
+        <!-- 打撃妨害ボタン -->
+        <button type="button" id="btn-special-interference" class="bg-slate-900 hover:bg-slate-800 active:scale-95 text-amber-300 font-bold py-1 rounded-lg text-[10px] border border-amber-900/40 shadow flex items-center justify-center gap-1 transition" title="打者一塁出塁・押し出し進塁（投球数+1）">
+          <span>🛡 打撃妨害</span>
+        </button>
+
+        <!-- 振り逃げ詳細ポップオーバー起動ボタン -->
+        <button type="button" id="btn-special-drop3rd" class="bg-slate-900 hover:bg-slate-800 active:scale-95 text-sky-300 font-bold py-1 rounded-lg text-[10px] border border-sky-900/40 shadow flex items-center justify-center gap-1 transition" title="三振＋捕手後逸・悪送球による進塁">
+          <span>💨 振り逃げ</span>
+        </button>
+      </div>
+
+      <!-- 3. 【ステップ3新設】振り逃げ詳細指定ポップオーバー -->
+      <div id="drop3rd-popover" class="hidden absolute top-4 inset-x-2 sm:inset-x-6 bg-slate-900 border-2 border-sky-500 rounded-2xl p-3 shadow-2xl z-50 flex flex-col gap-2.5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
+          <div class="flex items-center gap-1.5">
+            <span class="text-sm">💨</span>
+            <span class="text-xs font-black text-sky-300">振り逃げ（暴投・捕逸・悪送球）</span>
+          </div>
+          <button type="button" id="btn-close-drop3rd-popover" class="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-slate-800 font-bold">✕</button>
+        </div>
+
+        <div class="space-y-1.5 text-xs">
+          <!-- 打者の到達塁選択 -->
+          <div>
+            <span class="text-[10px] text-slate-400 font-bold block mb-1">打者走者の到達塁:</span>
+            <div class="grid grid-cols-3 gap-1.5 font-bold">
+              <button type="button" class="btn-drop3rd-base py-1.5 rounded-lg border border-sky-500 bg-sky-950/70 text-sky-200 active:scale-95 text-center text-xs" data-base="1">
+                一塁 到達
+              </button>
+              <button type="button" class="btn-drop3rd-base py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 active:scale-95 text-center text-xs" data-base="2">
+                二塁 到達 (暴投)
+              </button>
+              <button type="button" class="btn-drop3rd-base py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 active:scale-95 text-center text-xs" data-base="3">
+                三塁 到達 (悪送球)
+              </button>
+            </div>
+          </div>
+
+          <!-- 生還得点の選択 -->
+          <div>
+            <span class="text-[10px] text-slate-400 font-bold block mb-1">このプレーでの生還走者:</span>
+            <div class="grid grid-cols-3 gap-1.5 font-bold">
+              <button type="button" class="btn-drop3rd-runs py-1 rounded-lg border border-emerald-500 bg-emerald-950/70 text-emerald-200 active:scale-95 text-center text-xs" data-runs="0">
+                0点 (生還なし)
+              </button>
+              <button type="button" class="btn-drop3rd-runs py-1 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 active:scale-95 text-center text-xs" data-runs="1">
+                ＋1点 生還
+              </button>
+              <button type="button" class="btn-drop3rd-runs py-1 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 active:scale-95 text-center text-xs" data-runs="2">
+                ＋2点 生還
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" id="btn-confirm-drop3rd" class="w-full py-2 bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-black rounded-xl text-xs shadow-md transition">
+          この内容で確定する
         </button>
       </div>
     `;
@@ -246,6 +314,100 @@ export class RunnerDiamondComponent {
     bindBtn("btn-runner-caught", () => this.handleCaughtStealing());
     bindBtn("btn-runner-wildpitch", () => this.handleWildPitchAdvance());
     bindBtn("btn-runner-pickoff", () => this.handlePickoff());
+
+    // 【ステップ3新設】ボークボタン
+    bindBtn("btn-special-balk", () => {
+      if (typeof this.gameState.handleBalk === "function") {
+        this.gameState.handleBalk();
+      }
+    });
+
+    // 【ステップ3新設】打撃妨害ボタン
+    bindBtn("btn-special-interference", () => {
+      if (typeof this.gameState.handleCatcherInterference === "function") {
+        this.gameState.handleCatcherInterference();
+      }
+    });
+
+    // 【ステップ3新設】振り逃げポップオーバー開閉 ＆ 確定処理
+    this.bindDropThirdStrikeEvents();
+  }
+
+  /**
+   * 振り逃げ詳細ポップオーバーのイベント結線
+   */
+  bindDropThirdStrikeEvents() {
+    const btnOpen = this.container.querySelector("#btn-special-drop3rd");
+    const popover = this.container.querySelector("#drop3rd-popover");
+    const btnClose = this.container.querySelector("#btn-close-drop3rd-popover");
+    const btnConfirm = this.container.querySelector("#btn-confirm-drop3rd");
+
+    if (!btnOpen || !popover) return;
+
+    let selectedBase = 1;
+    let selectedRuns = 0;
+
+    btnOpen.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      popover.classList.toggle("hidden");
+    });
+
+    if (btnClose) {
+      btnClose.addEventListener("click", (e) => {
+        e.stopPropagation();
+        popover.classList.add("hidden");
+      });
+    }
+
+    // 到達塁ボタン選択
+    const baseBtns = popover.querySelectorAll(".btn-drop3rd-base");
+    baseBtns.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        baseBtns.forEach((b) => {
+          b.className = "btn-drop3rd-base py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 active:scale-95 text-center text-xs";
+        });
+        btn.className = "btn-drop3rd-base py-1.5 rounded-lg border border-sky-500 bg-sky-950/70 text-sky-200 active:scale-95 text-center text-xs font-black shadow";
+        selectedBase = parseInt(btn.getAttribute("data-base"), 10) || 1;
+      });
+    });
+
+    // 生還得点ボタン選択
+    const runBtns = popover.querySelectorAll(".btn-drop3rd-runs");
+    runBtns.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        runBtns.forEach((b) => {
+          b.className = "btn-drop3rd-runs py-1 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 active:scale-95 text-center text-xs";
+        });
+        btn.className = "btn-drop3rd-runs py-1 rounded-lg border border-emerald-500 bg-emerald-950/70 text-emerald-200 active:scale-95 text-center text-xs font-black shadow";
+        selectedRuns = parseInt(btn.getAttribute("data-runs"), 10) || 0;
+      });
+    });
+
+    // 確定実行
+    if (btnConfirm) {
+      btnConfirm.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (typeof this.gameState.handleUncaughtThirdStrike === "function") {
+          this.gameState.handleUncaughtThirdStrike({
+            batterReachBase: selectedBase,
+            runsScored: selectedRuns
+          });
+        }
+        popover.classList.add("hidden");
+      });
+    }
+
+    // ポップオーバー外タップで閉じる
+    document.addEventListener("click", (e) => {
+      if (popover && !popover.classList.contains("hidden")) {
+        if (!popover.contains(e.target) && !btnOpen.contains(e.target)) {
+          popover.classList.add("hidden");
+        }
+      }
+    });
   }
 
   update(state) {
@@ -281,14 +443,14 @@ export class RunnerDiamondComponent {
       pitcherEl.textContent = state.currentPitcher.name;
     }
 
-    // 4. 走者の有無に応じた走塁ボタンの活性・非活性制御（誤操作防止）
+    // 4. 走者の有無に応じた走塁ボタン・ボークボタンの活性・非活性制御（誤操作防止）
     this.updateRunnerButtons(state);
 
     // 5. 直近投球ログの更新（#log-slot が存在する場合）
     this.renderLog(state);
   }
 
-  // 走者が1人もいない時はボタンをグレーアウト＆タップ不能にする
+  // 走者が1人もいない時は走塁ボタンおよびボークボタンを安全に非活性化
   updateRunnerButtons(state) {
     const hasRunners = Boolean(
       state.runners && (state.runners[1] || state.runners[2] || state.runners[3])
@@ -298,7 +460,8 @@ export class RunnerDiamondComponent {
       "btn-runner-steal",
       "btn-runner-caught",
       "btn-runner-wildpitch",
-      "btn-runner-pickoff"
+      "btn-runner-pickoff",
+      "btn-special-balk" // 走者がいない時のボーク誤タップを完全防止
     ];
 
     buttonIds.forEach((id) => {
@@ -357,7 +520,7 @@ export class RunnerDiamondComponent {
           return `
             <div class="flex items-center justify-between text-[11px] py-0.5 px-1.5 rounded ${idx === 0 ? "bg-slate-800/80 text-white font-bold" : "text-slate-300"}">
               <span class="text-slate-400 text-[10px] w-12">${p.inningStr}</span>
-              <span class="text-amber-300 font-bold">${p.course}</span>
+              <span class="text-amber-300 font-bold">${p.course || "-"}</span>
               <span class="text-slate-200">${p.result}</span>
               <span class="text-[10px] text-slate-400">BSO: ${p.bsoBefore}</span>
             </div>
@@ -374,7 +537,10 @@ export class RunnerDiamondComponent {
     );
     if (!hasRunners) return;
 
-    const snapshot = JSON.parse(JSON.stringify(state));
+    // 軽量スナップショット取得（createSnapshotを安全に活用）
+    const snapshot = typeof this.gameState.createSnapshot === "function"
+      ? this.gameState.createSnapshot()
+      : JSON.parse(JSON.stringify(state));
 
     updateFn(state);
 
