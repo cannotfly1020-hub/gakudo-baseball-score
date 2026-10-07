@@ -1,11 +1,12 @@
 /**
  * js/app.js
- * アプリ全体の司令塔（完全非同期・ゼロ遅延レスポンス版 ＆ 過去試合アーカイブ統合）
+ * アプリ全体の司令塔（完全非同期・ゼロ遅延レスポンス版 ＆ 過去試合アーカイブ・捕手ボード統合）
  * 
  * 改善点:
  * - データベース保存（IndexedDB）を完全非同期デバウンス化し、タップ直後の画面描画を一切ブロックしない
  * - processPlayResult 内の snapshot を createSnapshot に統一
  * - 過去試合アーカイブ管理モーダル（GameArchiveModalComponent）の全体統合
+ * - 【新設】絵で見る捕手スコア盤コンポーネント（CatcherVisualBoard）の完全統合
  */
 
 import { GameState } from "./state.js";
@@ -16,6 +17,7 @@ import { SprayModalComponent } from "./components/sprayModal.js";
 import { RosterViewComponent } from "./components/rosterView.js";
 import { ScoreSheetComponent } from "./components/scoreSheet.js";
 import { GameArchiveModalComponent } from "./components/gameArchiveModal.js";
+import { CatcherVisualBoard } from "./components/catcherVisualBoard.js";
 import { dbStorage } from "./storage/indexedDb.js";
 import { DataExporter } from "./storage/exporter.js";
 
@@ -29,6 +31,7 @@ class BaseballApp {
     this.rosterViewComponent = null;
     this.scoreSheetComponent = null;
     this.gameArchiveModalComponent = null;
+    this.catcherVisualBoardComponent = null;
     this.saveTimer = null;
   }
 
@@ -59,6 +62,14 @@ class BaseballApp {
       document.body.appendChild(archiveModalSlot);
     }
 
+    // 絵で見る捕手スコア盤受皿スロット（自動生成フォールバック付き）
+    let catcherModalSlot = document.getElementById("catcher-modal-slot");
+    if (!catcherModalSlot) {
+      catcherModalSlot = document.createElement("div");
+      catcherModalSlot.id = "catcher-modal-slot";
+      document.body.appendChild(catcherModalSlot);
+    }
+
     if (scoreboardSlot) {
       this.scoreboardComponent = new ScoreboardComponent(scoreboardSlot, this.gameState);
     }
@@ -81,6 +92,13 @@ class BaseballApp {
       } catch (err) {
         console.error("ScoreSheetComponent 初期化エラー:", err);
       }
+    }
+
+    // 【新設】絵で見る捕手スコア盤の安全な初期化
+    try {
+      this.catcherVisualBoardComponent = new CatcherVisualBoard(this.gameState);
+    } catch (err) {
+      console.error("CatcherVisualBoard 初期化エラー:", err);
     }
 
     if (archiveModalSlot) {
@@ -161,6 +179,17 @@ class BaseballApp {
   }
 
   bindGlobalActions() {
+    // 【新設】絵で見る捕手スコア盤 ワンタップ呼び出し
+    const catcherBtn = document.getElementById("btn-open-catcher-board");
+    if (catcherBtn) {
+      catcherBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (this.catcherVisualBoardComponent) {
+          this.catcherVisualBoardComponent.open();
+        }
+      });
+    }
+
     const undoBtn = document.getElementById("btn-undo");
     if (undoBtn) {
       undoBtn.addEventListener("click", (e) => {
@@ -188,7 +217,7 @@ class BaseballApp {
       });
     }
 
-    // スコア表オープン処理（診断用通知付き）
+    // スコア表オープン処理（alert禁止原則に準拠した安全なハンドリング）
     const scoresheetBtn = document.getElementById("btn-open-scoresheet");
     if (scoresheetBtn) {
       scoresheetBtn.addEventListener("click", (e) => {
@@ -205,8 +234,7 @@ class BaseballApp {
           }
           this.scoreSheetComponent.open();
         } catch (err) {
-          window.alert("スコア表起動エラー:\n" + err.message);
-          console.error(err);
+          console.error("スコア表起動エラー:", err);
         }
       });
     }
