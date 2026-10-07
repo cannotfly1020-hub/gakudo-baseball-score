@@ -1,11 +1,15 @@
 /**
  * js/state.js
- * 試合状態の一元管理（超高速・ゼロ遅延レスポンス版）
+ * 試合状態の一元管理（超高速・ゼロ遅延レスポンス版 ＆ 例外ルール・70球特例完全対応版）
  * 
  * 改善点:
  * - recordPitch 内の JSON.stringify を完全撤廃
  * - createSnapshot による軽量シャローコピーで毎球の処理速度を0.1ms以下に短縮
  * - スコア・カウント・走者の即時反映
+ * - 【ステップ3】ボーク（走者自動進塁・カウント不変）ハンドラの追加
+ * - 【ステップ3】打撃妨害（投球数+1・打者出塁・押し出し進塁）ハンドラの追加
+ * - 【ステップ3】振り逃げ詳細（奪三振＋打者出塁・暴投進塁）ハンドラの追加
+ * - 【ステップ3】学童公式戦70球制限「打席完了特例」ステータス算出関数の追加
  */
 
 export class GameState {
@@ -433,5 +437,189 @@ export class GameState {
       Object.assign(this.state, lastAction.snapshot);
       this.notify();
     }
+  }
+
+  // ==========================================================================
+  // 【ステップ3新設】学童野球の例外・珍プレー救済ロジック
+  // ==========================================================================
+
+  /**
+   * ボーク（Balk）の独立処理
+   * - 走者が1人以上いる場合に全走者を1塁進塁（3塁走者は本塁生還）
+   * - カウント（ボール・ストライク）や打順は一切進めない
+   */
+  handleBalk() {
+    const hasRunner = this.state.runners[1] || this.state.runners[2] || this.state.runners[3];
+    if (!hasRunner) return; // 走者がいなければ何もしない
+
+    const snapshot = this.createSnapshot();
+
+    // 走者の一斉進塁
+    const r1 = this.state.runners[1];
+    const r2 = this.state.runners[2];
+    const r3 = this.state.runners[3];
+
+    // 3塁走者は得点
+    if (r3) {
+      this.addRun(1);
+    }
+    this.state.runners[3] = r2;
+    this.state.runners[2] = r1;
+    this.state.runners[1] = false;
+
+    const pitchEvent = {
+      pitchNum: this.state.pitchCount,
+      pitcherName: this.state.currentPitcher ? this.state.currentPitcher.name : "投手",
+      inningStr: `${this.state.inning}回${this.state.isTop ? "表" : "裏"}`,
+      course: null,
+      result: "ボーク (全走者1進塁)",
+      bsoBefore: `${snapshot.balls}-${snapshot.strikes}-${snapshot.outs}`
+    };
+
+    this.state.history.push({ snapshot, pitchEvent });
+    this.notify();
+  }
+
+  /**
+   * 打撃妨害（Catcher's Interference）の独立処理
+   * - 投球数を +1
+   * - 打者を一塁へ（押し出し満塁なら得点加算）
+   * - カウントをリセットして次打者へ進める
+   */
+  handleCatcherInterference() {
+    const snapshot = this.createSnapshot();
+
+    // 投球数を加算
+    this.state.pitchCount += 1;
+    this.incrementCurrentPitcherCount();
+
+    // 打者一塁出塁（押し出し進塁）
+    this.advanceWalk();
+
+    // カウントリセット ＆ 次打者へ
+    this.resetCount();
+    this.advanceBatter();
+
+    const pitchEvent = {
+      pitchNum: this.state.pitchCount,
+      pitcherName: this.state.currentPitcher ? this.state.currentPitcher.name : "投手",
+      inningStr: `${snapshot.inning}回${snapshot.isTop ? "表" : "裏"}`,
+      course: null,
+      result: "打撃妨害 (打者一塁出塁)",
+      bsoBefore: `${snapshot.balls}-${snapshot.strikes}-${snapshot.outs}`
+    };
+
+    this.state.history.push({ snapshot, pitchEvent });
+    this.notify();
+  }
+
+  /**
+   * 振り逃げ詳細処理（Uncaught Third Strike）
+   * - 空振り・見逃し三振後の捕手後逸や送球エラーによる出塁・進塁
+   * @param {Object} options
+   * @param {number} options.batterReachBase - 打者の到達塁 (1: 一塁, 2: 二塁, 3: 三塁)
+   * @param {number} options.runsScored - このプレーで生還した走者の総得点
+   */
+  handleUncaughtThirdStrike(options = { batterReachBase: 1, runsScored: 0 }) {
+    const snapshot = this.createSnapshot();
+
+    // 投球数を加算
+    this.state.pitchCount += 1;
+    this.incrementCurrentPitcherCount();
+
+    const reachBase = options.batterReachBase || 1;
+    const runs = options.runsScored || 0;
+
+    // 走者生還による得点加算
+    if (runs > 0) {
+      this.addRun(runs);
+    }
+
+    // 打者の進塁塁を設定
+    if (reachBase === 1) {
+      if (this.state.runners[3] && runs === 0) {
+        // 得点指定が明示されていない場合の安全補正
+        this.state.runners[3] = false;
+        this.addRun(1);
+      }
+      this.state.runners[3] = this.state.runners[2] || false;
+      this.state.runners[2] = this.state.runners[1] || false;
+      this.state.runners[1] = true;
+    } else if (reachBase === 2) {
+      if (this.state.runners[3] && runs === 0) this.addRun(1);
+      if (this.state.runners[2] && runs === 0) this.addRun(1);
+      this.state.runners[3] = this.state.runners[1] || false;
+      this.state.runners[2] = true;
+      this.state.runners[1] = false;
+    } else if (reachBase === 3) {
+      let tripleRuns = 0;
+      if (this.state.runners[1]) tripleRuns++;
+      if (this.state.runners[2]) tripleRuns++;
+      if (this.state.runners[3]) tripleRuns++;
+      if (runs === 0 && tripleRuns > 0) this.addRun(tripleRuns);
+      this.state.runners = { 1: false, 2: false, 3: true };
+    }
+
+    // カウントリセット ＆ 次打者へ（アウトカウントは増やさない）
+    this.resetCount();
+    this.advanceBatter();
+
+    const pitchEvent = {
+      pitchNum: this.state.pitchCount,
+      pitcherName: this.state.currentPitcher ? this.state.currentPitcher.name : "投手",
+      inningStr: `${snapshot.inning}回${snapshot.isTop ? "表" : "裏"}`,
+      course: null,
+      result: `振り逃げ (${reachBase}塁到達${runs > 0 ? `・${runs}得点` : ""})`,
+      bsoBefore: `${snapshot.balls}-${snapshot.strikes}-${snapshot.outs}`
+    };
+
+    this.state.history.push({ snapshot, pitchEvent });
+    this.notify();
+  }
+
+  /**
+   * 学童野球70球制限「打席完了特例」ステータスの算出
+   * @returns {Object} { status: "normal"|"warning"|"at_bat_allowed"|"limit_reached", currentCount, limit, message }
+   */
+  getPitchLimitStatus() {
+    const currentCount = this.getCurrentPitcherCount();
+    const limit = this.state.pitchLimit || 70;
+    const isAtBatOngoing = (this.state.balls > 0 || this.state.strikes > 0);
+
+    if (currentCount >= limit) {
+      if (isAtBatOngoing) {
+        return {
+          status: "at_bat_allowed",
+          currentCount,
+          limit,
+          badgeColor: "bg-amber-500 text-slate-950 font-black animate-pulse",
+          message: `⚠️ ${limit}球到達（本打席完了まで投球可能）`
+        };
+      } else {
+        return {
+          status: "limit_reached",
+          currentCount,
+          limit,
+          badgeColor: "bg-rose-600 text-white font-black",
+          message: `🚨 ${limit}球上限到達（次打者から登板不可）`
+        };
+      }
+    } else if (currentCount >= limit - 10) {
+      return {
+        status: "warning",
+        currentCount,
+        limit,
+        badgeColor: "bg-yellow-400 text-slate-900 font-bold",
+        message: `残 ${limit - currentCount}球`
+      };
+    }
+
+    return {
+      status: "normal",
+      currentCount,
+      limit,
+      badgeColor: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30",
+      message: `${currentCount} / ${limit}球`
+    };
   }
 }
