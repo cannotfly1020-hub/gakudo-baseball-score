@@ -1,11 +1,12 @@
 /**
  * js/components/catcherVisualBoard.js
- * 【小学生キャッチャー専用】絵で見る捕手スコア盤コンポーネント（GameState正規連動版）
+ * 【小学生キャッチャー専用】絵で見る捕手スコア盤コンポーネント（完全連動・データ自動検知版）
  * 
- * 修正点:
- * 1. state.js の正規データ構造（teams.away / teams.home, h.snapshot.currentBatter）に完全対応
- * 2. 1回表・裏が終了した時点で相手打者の打席が100%確実に絵画テーブルへ反映
- * 3. 打球結果（単打・長打・凡打・三振・四球）とコース位置をリアルタイムにビジュアル化
+ * 根本修正:
+ * 1. 先攻/後攻の決め打ちによる1回表データ破棄を完全根絶
+ * 2. どちらのチームでもワンタップで切り替えられる「チーム切替バー」を新設
+ * 3. 1回表・裏のどちらか一方しか入力されていない場合でも、データが存在するチームを自動検知して即時描画
+ * 4. 打席完了（三振・四球・打球）はもちろん、打席途中の配球もリアルタイムにビジュアル化
  */
 
 export class CatcherVisualBoard {
@@ -13,14 +14,12 @@ export class CatcherVisualBoard {
     this.state = state;
     this.isOpen = false;
     this.currentFocusEye = "all"; // 'all' | 'first' | 'hits' | 'twostrikes'
+    this.selectedTeamSide = null; // 'away' | 'home' | null (自動)
     this.modalEl = null;
 
     this._injectModalContainer();
   }
 
-  /**
-   * モーダル用DOM構造の注入
-   */
   _injectModalContainer() {
     if (document.getElementById("catcher-visual-modal")) return;
 
@@ -47,6 +46,21 @@ export class CatcherVisualBoard {
           <button id="cvb-close-btn" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center font-bold text-lg active:scale-95 transition">
             ✕
           </button>
+        </div>
+
+        <!-- チーム切替バー（先攻/後攻の即時切り替え） -->
+        <div class="bg-slate-950/90 border-b border-slate-800 px-3 py-2 shrink-0 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 text-xs text-slate-300 font-bold">
+            <span>相手打線を表示:</span>
+          </div>
+          <div class="flex items-center gap-1.5" id="cvb-team-toggle-group">
+            <button type="button" id="cvb-team-away-btn" class="px-2.5 py-1 rounded-xl text-xs font-black border transition active:scale-95 bg-sky-600 text-white border-sky-400 shadow">
+              先攻チーム (表)
+            </button>
+            <button type="button" id="cvb-team-home-btn" class="px-2.5 py-1 rounded-xl text-xs font-black border transition active:scale-95 bg-slate-800 text-slate-300 border-slate-700">
+              後攻チーム (裏)
+            </button>
+          </div>
         </div>
 
         <!-- 着眼点切り替えバー -->
@@ -93,7 +107,7 @@ export class CatcherVisualBoard {
             <table class="w-full border-collapse min-w-[580px]">
               <thead>
                 <tr class="text-[11px] font-extrabold text-slate-400 border-b border-slate-800">
-                  <th class="py-2 px-2 text-left w-28">相手打者</th>
+                  <th class="py-2 px-2 text-left w-28">打者</th>
                   <th class="py-2 px-2 text-center">第1打席</th>
                   <th class="py-2 px-2 text-center">第2打席</th>
                   <th class="py-2 px-2 text-center">第3打席</th>
@@ -159,6 +173,10 @@ export class CatcherVisualBoard {
     document.getElementById("cvb-close-btn").addEventListener("click", () => this.close());
     document.getElementById("cvb-detail-close-btn").addEventListener("click", () => this._hideDetail());
 
+    // チーム切替ボタンイベント
+    document.getElementById("cvb-team-away-btn").addEventListener("click", () => this.setTeamSide("away"));
+    document.getElementById("cvb-team-home-btn").addEventListener("click", () => this.setTeamSide("home"));
+
     // 着眼点切り替えボタン
     container.querySelectorAll(".cvb-eye-btn").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -169,22 +187,49 @@ export class CatcherVisualBoard {
   }
 
   /**
-   * 現在のGameStateから相手打線の打席データを抽出
+   * 現在のGameStateから対象チームの打席データを抽出
    */
   _extractOpponentAtBats() {
     const gameState = typeof this.state.getState === "function" ? this.state.getState() : this.state;
     if (!gameState || !gameState.teams) return [];
 
-    // 自チームが away なら相手は home、自チームが home なら相手は away
-    const mySide = gameState.gameInfo?.myTeamSide || "away";
-    const oppSide = mySide === "away" ? "home" : "away";
-    const oppTeam = gameState.teams[oppSide] || { roster: [] };
-    const roster = oppTeam.roster || [];
-
-    // 相手チームが攻撃していたイニングの判定（相手が home なら裏、away なら表）
-    const oppIsTop = (oppSide === "away");
-
     const history = gameState.history || [];
+
+    // 履歴に存在する投球の攻守（表/裏）をカウントして、データが存在する側を自動判定
+    let awayPitches = 0;
+    let homePitches = 0;
+    history.forEach((h) => {
+      const isTop = h.snapshot ? h.snapshot.isTop : (h.pitchEvent ? h.pitchEvent.isTop : true);
+      if (isTop) awayPitches++;
+      else homePitches++;
+    });
+
+    // ユーザー指定がない場合のインテリジェント初期選択
+    if (!this.selectedTeamSide) {
+      const mySide = gameState.gameInfo?.myTeamSide || "away";
+      const oppSide = mySide === "away" ? "home" : "away";
+
+      // 相手チーム側にデータがあれば相手を表示、なければデータが存在する側を自動選択
+      if (oppSide === "home" && homePitches > 0) {
+        this.selectedTeamSide = "home";
+      } else if (oppSide === "away" && awayPitches > 0) {
+        this.selectedTeamSide = "away";
+      } else if (awayPitches > 0) {
+        this.selectedTeamSide = "away"; // 1回表のみ入力されている場合は先攻を自動表示
+      } else if (homePitches > 0) {
+        this.selectedTeamSide = "home";
+      } else {
+        this.selectedTeamSide = oppSide;
+      }
+    }
+
+    const currentSide = this.selectedTeamSide || "away";
+    const targetTeam = gameState.teams[currentSide] || { roster: [] };
+    const roster = targetTeam.roster || [];
+    const isTargetTop = (currentSide === "away");
+
+    // UIボタンのアクティブ状態を同期
+    this._updateTeamButtonsUI(gameState, currentSide, awayPitches, homePitches);
 
     // 打者ごとに打席を整理
     return roster.map((player, idx) => {
@@ -192,7 +237,6 @@ export class CatcherVisualBoard {
       const playerName = player.name || `${orderNum}番 打者`;
       const playerPos = player.pos || "-";
 
-      // この打者の投球を history から抽出（相手の攻撃イニング かつ この打順の打席）
       const batterPitches = [];
       let currentAtBat = [];
       let lastInning = null;
@@ -200,31 +244,43 @@ export class CatcherVisualBoard {
       history.forEach((h) => {
         const snap = h.snapshot;
         const pEv = h.pitchEvent;
-        if (!snap || !pEv) return;
+        if (!snap && !pEv) return;
 
-        // 相手チームの攻撃回であるか
-        if (snap.isTop !== oppIsTop) return;
+        // 投球の表裏（isTop）判定
+        const pitchIsTop = snap ? snap.isTop : (pEv.inningStr ? pEv.inningStr.includes("表") : true);
+        if (pitchIsTop !== isTargetTop) return;
 
-        // 打者の一致判定
-        const bOrder = snap.currentBatter ? snap.currentBatter.order : null;
+        // 打者の一致判定（厳格な型比較を避けて安全に比較）
+        let bOrder = null;
+        if (snap && snap.currentBatter) {
+          bOrder = Number(snap.currentBatter.order);
+        } else if (pEv && pEv.batterOrder) {
+          bOrder = Number(pEv.batterOrder);
+        }
+
         if (bOrder !== orderNum) return;
 
+        const currentInning = snap ? snap.inning : (parseInt(pEv.inningStr, 10) || 1);
+
         // イニングが変わった場合は新打席とみなす
-        if (lastInning !== null && lastInning !== snap.inning) {
+        if (lastInning !== null && lastInning !== currentInning) {
           if (currentAtBat.length > 0) {
             batterPitches.push([...currentAtBat]);
             currentAtBat = [];
           }
         }
-        lastInning = snap.inning;
+        lastInning = currentInning;
 
         currentAtBat.push({ snapshot: snap, pitchEvent: pEv });
 
-        // 打席完了判定（3ストライク三振、4ボール四球、死球、打球インプレー、振り逃げなど）
-        const res = pEv.result || "";
-        const isStrikeOut = (res.includes("ストライク") || res === "空振り") && snap.strikes === 2;
-        const isWalk = (res === "ボール" && snap.balls === 3) || (res === "死球");
-        const isInPlay = res.startsWith("打球") || pEv.play;
+        // 打席完了判定
+        const res = (pEv && pEv.result) ? pEv.result : "";
+        const snapStrikes = snap ? snap.strikes : 0;
+        const snapBalls = snap ? snap.balls : 0;
+
+        const isStrikeOut = res.includes("三振") || ((res.includes("ストライク") || res === "空振り") && snapStrikes === 2);
+        const isWalk = (res === "ボール" && snapBalls === 3) || (res === "死球");
+        const isInPlay = res.startsWith("打球") || (pEv && pEv.play);
         const isSpecialOut = res.includes("振り逃げ") || res.includes("打撃妨害");
 
         if (isStrikeOut || isWalk || isInPlay || isSpecialOut) {
@@ -233,6 +289,7 @@ export class CatcherVisualBoard {
         }
       });
 
+      // 打席途中の場合でも残りの球を打席として保持（リアルタイム可視化）
       if (currentAtBat.length > 0) {
         batterPitches.push([...currentAtBat]);
       }
@@ -249,6 +306,26 @@ export class CatcherVisualBoard {
     });
   }
 
+  _updateTeamButtonsUI(gameState, currentSide, awayPitches, homePitches) {
+    const awayBtn = document.getElementById("cvb-team-away-btn");
+    const homeBtn = document.getElementById("cvb-team-home-btn");
+    if (!awayBtn || !homeBtn) return;
+
+    const awayName = (gameState.teams?.away?.name || "先攻チーム");
+    const homeName = (gameState.teams?.home?.name || "後攻チーム");
+
+    awayBtn.innerHTML = `<span>${awayName} (表)</span> <span class="text-[10px] opacity-75">(${awayPitches}球)</span>`;
+    homeBtn.innerHTML = `<span>${homeName} (裏)</span> <span class="text-[10px] opacity-75">(${homePitches}球)</span>`;
+
+    if (currentSide === "away") {
+      awayBtn.className = "px-2.5 py-1 rounded-xl text-xs font-black border transition active:scale-95 bg-sky-600 text-white border-sky-400 shadow";
+      homeBtn.className = "px-2.5 py-1 rounded-xl text-xs font-bold border transition active:scale-95 bg-slate-800 text-slate-300 border-slate-700";
+    } else {
+      homeBtn.className = "px-2.5 py-1 rounded-xl text-xs font-black border transition active:scale-95 bg-sky-600 text-white border-sky-400 shadow";
+      awayBtn.className = "px-2.5 py-1 rounded-xl text-xs font-bold border transition active:scale-95 bg-slate-800 text-slate-300 border-slate-700";
+    }
+  }
+
   /**
    * 1打席分のデータをビジュアル表示用に整形
    */
@@ -259,13 +336,13 @@ export class CatcherVisualBoard {
     const snap = last.snapshot;
     const ev = last.pitchEvent;
 
-    const inning = snap ? snap.inning : 1;
-    let resultText = ev.result || "完了";
+    const inning = snap ? snap.inning : (ev && ev.inningStr ? parseInt(ev.inningStr, 10) || 1 : 1);
+    let resultText = (ev && ev.result) ? ev.result : "打席中";
     let resultType = "out";
 
     // 打球結果の解析
     if (resultText.startsWith("打球")) {
-      const playType = ev.play ? ev.play.type : resultText;
+      const playType = (ev && ev.play) ? ev.play.type : resultText.replace("打球 (", "").replace(")", "");
       if (playType.includes("本") || playType.includes("二") || playType.includes("三")) {
         resultType = "extra";
       } else if (playType.includes("単打") || playType.includes("安")) {
@@ -274,20 +351,23 @@ export class CatcherVisualBoard {
         resultType = "out";
       }
       resultText = playType;
-    } else if (resultText.includes("三振") || ((ev.result === "空振り" || ev.result.includes("ストライク")) && snap.strikes === 2)) {
+    } else if (resultText.includes("三振") || ((ev.result === "空振り" || ev.result.includes("ストライク")) && snap && snap.strikes === 2)) {
       resultType = "so";
       resultText = ev.result === "空振り" ? "空三振" : "見三振";
-    } else if (resultText === "ボール" && snap.balls === 3) {
+    } else if (resultText === "ボール" && snap && snap.balls === 3) {
       resultType = "walk";
       resultText = "四球";
     } else if (resultText === "死球") {
       resultType = "walk";
       resultText = "死球";
+    } else {
+      resultType = "inprogress";
+      resultText = "打席中";
     }
 
     // 投球ドット配列の生成
     const formattedPitches = pitches.map((item, idx) => {
-      const p = item.pitchEvent;
+      const p = item.pitchEvent || {};
       const pNum = idx + 1;
       let pType = "ball";
 
@@ -295,9 +375,8 @@ export class CatcherVisualBoard {
       else if (p.result === "見逃しストライク") pType = "looking";
       else if (p.result === "空振り") pType = "swing";
       else if (p.result === "ファウル") pType = "foul";
-      else if (p.result.startsWith("打球")) pType = "inplay";
+      else if (p.result && p.result.startsWith("打球")) pType = "inplay";
 
-      // コース座標のマッピング（コース名から自然な位置を推測、または安全なデフォルト）
       const coords = this._getCourseCoordinates(p.course);
 
       return {
@@ -306,11 +385,10 @@ export class CatcherVisualBoard {
         x: coords.x,
         y: coords.y,
         courseName: p.course || "未指定",
-        desc: `${pNum}球目・${p.result} (${p.course || "コース未指定"})`
+        desc: `${pNum}球目・${p.result || "投球"} (${p.course || "コース未指定"})`
       };
     });
 
-    // スプレー（打球方向）の推測または保持データ
     const spray = this._getSprayForPlay(ev, resultType);
 
     return {
@@ -324,9 +402,6 @@ export class CatcherVisualBoard {
     };
   }
 
-  /**
-   * コース名からパーセンテージ座標 (0-100) を算出
-   */
   _getCourseCoordinates(courseName) {
     if (!courseName) return { x: 50, y: 50 };
 
@@ -342,11 +417,8 @@ export class CatcherVisualBoard {
     return map[courseName] || { x: 50, y: 50 };
   }
 
-  /**
-   * 打球結果からスプレーベクトルを生成
-   */
   _getSprayForPlay(pitchEvent, resultType) {
-    if (!pitchEvent.result.startsWith("打球") && !pitchEvent.play) return null;
+    if (!pitchEvent || (!pitchEvent.result?.startsWith("打球") && !pitchEvent.play)) return null;
 
     const playType = pitchEvent.play ? pitchEvent.play.type : pitchEvent.result;
     let angle = 0;
@@ -367,9 +439,6 @@ export class CatcherVisualBoard {
     };
   }
 
-  /**
-   * ミニ・ストライクゾーンSVGの描画
-   */
   _createMiniZoneSvg(atBat, isHighlighted) {
     const w = 72, h = 72;
     const zX = 18, zY = 14, zW = 36, zH = 40;
@@ -407,9 +476,6 @@ export class CatcherVisualBoard {
     `;
   }
 
-  /**
-   * ミニ・打球グラウンド（スプレー）SVGの描画
-   */
   _createMiniSpraySvg(atBat, isHighlighted) {
     const w = 72, h = 72;
     const hX = 36, hY = 62;
@@ -461,7 +527,7 @@ export class CatcherVisualBoard {
       tbody.innerHTML = `
         <tr>
           <td colspan="4" class="text-center py-8 text-xs font-bold text-slate-500">
-            まだ相手打線の打席データがありません。試合が進むと絵が表示されます。
+            まだこのチームの打席データがありません。試合が進むと絵文字文字盤が表示されます。
           </td>
         </tr>
       `;
@@ -519,6 +585,7 @@ export class CatcherVisualBoard {
         if (atBat.resultType === "single") badgeBg = "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40";
         if (atBat.resultType === "extra") badgeBg = "bg-rose-500/25 text-rose-300 border border-rose-500/50";
         if (atBat.resultType === "so") badgeBg = "bg-sky-500/20 text-sky-400 border border-sky-500/40";
+        if (atBat.resultType === "inprogress") badgeBg = "bg-amber-500/20 text-amber-300 border border-amber-500/40";
 
         const zoneSvg = this._createMiniZoneSvg(atBat, isHighlighted);
         const spraySvg = this._createMiniSpraySvg(atBat, isHighlighted);
@@ -535,7 +602,7 @@ export class CatcherVisualBoard {
             ${spraySvg}
           </div>
           <div class="text-[8px] font-bold text-amber-300/80 text-center truncate">
-            ${atBat.hitPitchIndex ? atBat.hitPitchIndex + "球目を打球" : "打席終了"}
+            ${atBat.hitPitchIndex ? atBat.hitPitchIndex + "球目" : "打席終了"}
           </div>
         `;
 
@@ -572,6 +639,11 @@ export class CatcherVisualBoard {
   _hideDetail() {
     const panel = document.getElementById("cvb-detail-panel");
     if (panel) panel.classList.add("hidden");
+  }
+
+  setTeamSide(sideKey) {
+    this.selectedTeamSide = sideKey;
+    this.render();
   }
 
   setFocusEye(eyeKey) {
