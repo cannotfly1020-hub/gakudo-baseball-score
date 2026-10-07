@@ -173,6 +173,29 @@ export class PitchEditModalComponent {
                 <span>⚡️</span>
                 <span>この1球を差し替えて自動再計算</span>
               </button>
+
+              <!-- 1球削除セクション（インライン二段階確認） -->
+              <div class="pt-2 border-t border-slate-800">
+                <button type="button" id="btn-show-delete-confirm" class="w-full py-1.5 bg-slate-950 hover:bg-rose-950/40 text-rose-400 hover:text-rose-300 border border-rose-900/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 active:scale-95">
+                  <span>🗑️</span>
+                  <span>この1球を取り消して削除（誤入力抹消）</span>
+                </button>
+
+                <!-- 削除確認ボックス（初期状態は非表示） -->
+                <div id="delete-confirm-box" class="hidden mt-2 p-2.5 rounded-xl bg-rose-950/30 border border-rose-800/60 space-y-2">
+                  <div class="text-[11px] font-bold text-rose-300 text-center leading-snug">
+                    ⚠️ 選択中の1球を履歴から完全に消去し、以降の全カウント・スコア・球数を自動再計算します。よろしいですか？
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="btn-cancel-delete" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold">
+                      キャンセル
+                    </button>
+                    <button type="button" id="btn-execute-delete" class="py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-black shadow transition active:scale-95">
+                      はい、削除実行
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -239,6 +262,67 @@ export class PitchEditModalComponent {
     const applyBtn = this.modalContainer.querySelector("#btn-apply-patch");
     if (applyBtn) {
       applyBtn.addEventListener("click", () => this.applyPatch());
+    }
+
+    // 削除確認ボックスの制御
+    const showDeleteBtn = this.modalContainer.querySelector("#btn-show-delete-confirm");
+    const confirmBox = this.modalContainer.querySelector("#delete-confirm-box");
+    const cancelDeleteBtn = this.modalContainer.querySelector("#btn-cancel-delete");
+    const executeDeleteBtn = this.modalContainer.querySelector("#btn-execute-delete");
+
+    if (showDeleteBtn && confirmBox) {
+      showDeleteBtn.addEventListener("click", () => {
+        confirmBox.classList.remove("hidden");
+        showDeleteBtn.classList.add("hidden");
+      });
+    }
+
+    if (cancelDeleteBtn && confirmBox && showDeleteBtn) {
+      cancelDeleteBtn.addEventListener("click", () => {
+        confirmBox.classList.add("hidden");
+        showDeleteBtn.classList.remove("hidden");
+      });
+    }
+
+    if (executeDeleteBtn) {
+      executeDeleteBtn.addEventListener("click", () => this.executeDeletePitch());
+    }
+  }
+
+  executeDeletePitch() {
+    if (this.selectedIndex < 0) return;
+
+    const targetIdx = this.selectedIndex;
+    const success = this.gameState.deletePitchHistory(targetIdx);
+
+    const msgEl = this.modalContainer.querySelector("#patch-status-message");
+    const confirmBox = this.modalContainer.querySelector("#delete-confirm-box");
+    const showDeleteBtn = this.modalContainer.querySelector("#btn-show-delete-confirm");
+
+    if (confirmBox) confirmBox.classList.add("hidden");
+    if (showDeleteBtn) showDeleteBtn.classList.remove("hidden");
+
+    if (success && msgEl) {
+      msgEl.textContent = `🗑️ #${targetIdx + 1}球目を削除し、全試合整合性を自動再計算しました！`;
+      msgEl.classList.remove("hidden");
+
+      setTimeout(() => {
+        msgEl.classList.add("hidden");
+        const state = this.gameState.getState();
+        const history = state.history || [];
+
+        if (history.length === 0) {
+          this.selectedIndex = -1;
+          const formArea = this.modalContainer.querySelector("#editor-form-area");
+          const emptyState = this.modalContainer.querySelector("#editor-empty-state");
+          if (formArea) formArea.classList.add("hidden");
+          if (emptyState) emptyState.classList.remove("hidden");
+        } else {
+          const nextIdx = Math.min(targetIdx, history.length - 1);
+          this.selectHistoryItem(nextIdx);
+        }
+        this.renderHistoryList();
+      }, 500);
     }
   }
 
@@ -406,6 +490,12 @@ export class PitchEditModalComponent {
 
     // リストの選択枠を再描画
     this.renderHistoryList();
+
+    // 削除確認ボックスのリセット
+    const confirmBox = this.modalContainer.querySelector("#delete-confirm-box");
+    const showDeleteBtn = this.modalContainer.querySelector("#btn-show-delete-confirm");
+    if (confirmBox) confirmBox.classList.add("hidden");
+    if (showDeleteBtn) showDeleteBtn.classList.remove("hidden");
   }
 
   applyPatch() {
