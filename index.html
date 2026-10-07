@@ -31,17 +31,24 @@
 
   <!-- 1. アプリヘッダー (PC・スマホ両対応の2段レイアウト) -->
   <header class="w-full max-w-full md:max-w-7xl mb-2 flex flex-col gap-2 border-b border-slate-800 pb-2 flex-shrink-0">
-    <!-- 上段：タイトル＆バージョン -->
+    <!-- 上段：タイトル＆バージョン ＆ 【新設】絵で見る捕手スコア盤ボタン -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
         <span class="text-xl sm:text-2xl">⚾️</span>
         <h1 class="text-base sm:text-lg font-black text-emerald-400">学童野球 1球速報</h1>
         <span class="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700 font-mono">v1.0 (PWA)</span>
       </div>
-      <p class="text-[10px] text-slate-500 font-mono hidden sm:block">gakudo-baseball-score</p>
+      <div class="flex items-center gap-2">
+        <!-- 【小学生捕手専用】絵で見る捕手スコア盤 ワンタップ呼出ボタン -->
+        <button id="btn-open-catcher-board" type="button" class="h-8 px-2.5 bg-gradient-to-r from-amber-500/20 to-amber-400/10 hover:from-amber-500/30 hover:to-amber-400/20 active:scale-95 text-amber-300 text-xs font-black rounded-xl border border-amber-400/40 flex items-center gap-1.5 shadow-md transition">
+          <span class="text-sm">🎯</span>
+          <span>捕手ボード</span>
+        </button>
+        <p class="text-[10px] text-slate-500 font-mono hidden sm:block">gakudo-baseball-score</p>
+      </div>
     </div>
 
-    <!-- 下段：5等分均等アクションボタン（CSVボタンを過去試合へ集約し特大化） -->
+    <!-- 下段：5等分均等アクションボタン（既存の大人の操作導線を100%維持） -->
     <div class="grid grid-cols-5 gap-1.5 sm:gap-2 w-full max-w-full sm:max-w-2xl">
       <button id="btn-open-roster" type="button" class="h-9 px-1 sm:px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-sky-400 text-xs font-bold rounded-lg border border-sky-900/50 flex items-center justify-center gap-1 shadow transition">
         <span>📋</span>
@@ -110,6 +117,9 @@
 
   <!-- 過去試合アーカイブ・履歴管理モーダル -->
   <div id="archive-modal-slot" class="hidden"></div>
+
+  <!-- 【新設】絵で見る捕手スコア盤モーダルスロット -->
+  <div id="catcher-modal-slot"></div>
 
   <!-- リセット確認ダイアログ（誤操作を完全に防ぐ2段階モーダル） -->
   <div id="reset-confirm-modal" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 select-none">
