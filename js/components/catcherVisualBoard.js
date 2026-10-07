@@ -1,21 +1,20 @@
 /**
- * catcherVisualBoard.js
- * 【小学生キャッチャー専用】絵で見る捕手スコア盤コンポーネント
+ * js/components/catcherVisualBoard.js
+ * 【小学生キャッチャー専用】絵で見る捕手スコア盤コンポーネント（GameState正規連動版）
  * 
- * 既存のGameStateを読み取り専用で参照し、
- * 小学生が直感的に「コース枠」と「グラウンド矢印」から試合の流れを自ら読み解くための
- * 独立モーダルコンポーネントです。
+ * 修正点:
+ * 1. state.js の正規データ構造（teams.away / teams.home, h.snapshot.currentBatter）に完全対応
+ * 2. 1回表・裏が終了した時点で相手打者の打席が100%確実に絵画テーブルへ反映
+ * 3. 打球結果（単打・長打・凡打・三振・四球）とコース位置をリアルタイムにビジュアル化
  */
 
 export class CatcherVisualBoard {
   constructor(state) {
     this.state = state;
     this.isOpen = false;
-    this.currentFocusEye = 'all'; // 'all' | 'first' | 'hits' | 'twostrikes'
-    this.selectedAtBatDetail = null;
+    this.currentFocusEye = "all"; // 'all' | 'first' | 'hits' | 'twostrikes'
     this.modalEl = null;
 
-    // 初期化時にモーダルコンテナをDOMに追加
     this._injectModalContainer();
   }
 
@@ -23,13 +22,14 @@ export class CatcherVisualBoard {
    * モーダル用DOM構造の注入
    */
   _injectModalContainer() {
-    if (document.getElementById('catcher-visual-modal')) return;
+    if (document.getElementById("catcher-visual-modal")) return;
 
-    const container = document.createElement('div');
-    container.id = 'catcher-visual-modal';
-    container.className = 'fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm overflow-y-auto p-2 sm:p-4 flex flex-col justify-start items-center';
+    const container = document.createElement("div");
+    container.id = "catcher-visual-modal";
+    container.className = "fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm overflow-y-auto p-2 sm:p-4 flex flex-col justify-start items-center select-none";
     container.innerHTML = `
       <div class="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92vh]">
+        
         <!-- ヘッダー -->
         <div class="bg-slate-900/95 border-b border-slate-800 px-4 py-3 flex items-center justify-between shrink-0">
           <div class="flex items-center space-x-2">
@@ -93,7 +93,7 @@ export class CatcherVisualBoard {
             <table class="w-full border-collapse min-w-[580px]">
               <thead>
                 <tr class="text-[11px] font-extrabold text-slate-400 border-b border-slate-800">
-                  <th class="py-2 px-2 text-left w-24">打順・選手</th>
+                  <th class="py-2 px-2 text-left w-28">相手打者</th>
                   <th class="py-2 px-2 text-center">第1打席</th>
                   <th class="py-2 px-2 text-center">第2打席</th>
                   <th class="py-2 px-2 text-center">第3打席</th>
@@ -113,7 +113,7 @@ export class CatcherVisualBoard {
                 <span class="w-3.5 h-3.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[8px] flex items-center justify-center font-mono">①</span> 打球
               </span>
               <span class="inline-flex items-center gap-1 text-slate-300">
-                <span class="w-3.5 h-3.5 rounded-full bg-red-500 text-white font-black text-[8px] flex items-center justify-center font-mono">②</span> 空振り/見逃し
+                <span class="w-3.5 h-3.5 rounded-full bg-rose-500 text-white font-black text-[8px] flex items-center justify-center font-mono">②</span> ストライク
               </span>
               <span class="inline-flex items-center gap-1 text-slate-300">
                 <span class="w-3.5 h-3.5 rounded-full bg-blue-500 text-white font-black text-[8px] flex items-center justify-center font-mono">③</span> ボール
@@ -155,64 +155,90 @@ export class CatcherVisualBoard {
     document.body.appendChild(container);
     this.modalEl = container;
 
-    // イベントリスナーの結線
-    document.getElementById('cvb-close-btn').addEventListener('click', () => this.close());
-    document.getElementById('cvb-detail-close-btn').addEventListener('click', () => this._hideDetail());
+    // 閉じるボタン
+    document.getElementById("cvb-close-btn").addEventListener("click", () => this.close());
+    document.getElementById("cvb-detail-close-btn").addEventListener("click", () => this._hideDetail());
 
     // 着眼点切り替えボタン
-    container.querySelectorAll('.cvb-eye-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const eye = e.currentTarget.getAttribute('data-eye');
+    container.querySelectorAll(".cvb-eye-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const eye = e.currentTarget.getAttribute("data-eye");
         this.setFocusEye(eye);
       });
     });
   }
 
   /**
-   * 現在のGameStateから、キャッチャーが見るべき相手打線の打席データを抽出
+   * 現在のGameStateから相手打線の打席データを抽出
    */
   _extractOpponentAtBats() {
-    const gameState = this.state.getGameState ? this.state.getGameState() : this.state;
-    if (!gameState) return [];
+    const gameState = typeof this.state.getState === "function" ? this.state.getState() : this.state;
+    if (!gameState || !gameState.teams) return [];
 
-    // 現在のイニングが表か裏か（表なら先攻が攻撃・後攻が守備）
-    const isTop = gameState.gameInfo ? gameState.gameInfo.isTop : true;
-    
-    // キャッチャーが守る相手チームのオーダー
-    // isTop === true（相手が先攻攻撃）なら相手は myTeam ではなく opponentTeam
-    const opponentTeam = isTop 
-      ? (gameState.orders ? gameState.orders.myTeam : []) // 守備視点
-      : (gameState.orders ? gameState.orders.opponentTeam : []);
+    // 自チームが away なら相手は home、自チームが home なら相手は away
+    const mySide = gameState.gameInfo?.myTeamSide || "away";
+    const oppSide = mySide === "away" ? "home" : "away";
+    const oppTeam = gameState.teams[oppSide] || { roster: [] };
+    const roster = oppTeam.roster || [];
+
+    // 相手チームが攻撃していたイニングの判定（相手が home なら裏、away なら表）
+    const oppIsTop = (oppSide === "away");
 
     const history = gameState.history || [];
 
-    // 選手ごとに打席をグループ化
-    return (opponentTeam || []).map((player, index) => {
-      const orderNum = index + 1;
-      const playerName = player.name || `${orderNum}番打者`;
-      const playerPos = player.pos || '-';
-      const playerId = player.id;
+    // 打者ごとに打席を整理
+    return roster.map((player, idx) => {
+      const orderNum = idx + 1;
+      const playerName = player.name || `${orderNum}番 打者`;
+      const playerPos = player.pos || "-";
 
-      // 該当選手の履歴を抽出
-      const playerPitches = history.filter(h => h.batterId === playerId || h.batterOrder === orderNum);
+      // この打者の投球を history から抽出（相手の攻撃イニング かつ この打順の打席）
+      const batterPitches = [];
+      let currentAtBat = [];
+      let lastInning = null;
 
-      // 打席ごとに分割（打席インデックスまたは打撃結果区切り）
-      const atBats = [];
-      let currentAtBatPitches = [];
+      history.forEach((h) => {
+        const snap = h.snapshot;
+        const pEv = h.pitchEvent;
+        if (!snap || !pEv) return;
 
-      playerPitches.forEach(pitch => {
-        currentAtBatPitches.push(pitch);
-        // 打席が終了するイベント（三振、四死球、インプレー打球）
-        if (pitch.isAtBatEnd || pitch.result === 'hit' || pitch.result === 'out' || pitch.result === 'fourball' || pitch.result === 'strikeout') {
-          atBats.push(this._formatAtBat(currentAtBatPitches, atBats.length + 1));
-          currentAtBatPitches = [];
+        // 相手チームの攻撃回であるか
+        if (snap.isTop !== oppIsTop) return;
+
+        // 打者の一致判定
+        const bOrder = snap.currentBatter ? snap.currentBatter.order : null;
+        if (bOrder !== orderNum) return;
+
+        // イニングが変わった場合は新打席とみなす
+        if (lastInning !== null && lastInning !== snap.inning) {
+          if (currentAtBat.length > 0) {
+            batterPitches.push([...currentAtBat]);
+            currentAtBat = [];
+          }
+        }
+        lastInning = snap.inning;
+
+        currentAtBat.push({ snapshot: snap, pitchEvent: pEv });
+
+        // 打席完了判定（3ストライク三振、4ボール四球、死球、打球インプレー、振り逃げなど）
+        const res = pEv.result || "";
+        const isStrikeOut = (res.includes("ストライク") || res === "空振り") && snap.strikes === 2;
+        const isWalk = (res === "ボール" && snap.balls === 3) || (res === "死球");
+        const isInPlay = res.startsWith("打球") || pEv.play;
+        const isSpecialOut = res.includes("振り逃げ") || res.includes("打撃妨害");
+
+        if (isStrikeOut || isWalk || isInPlay || isSpecialOut) {
+          batterPitches.push([...currentAtBat]);
+          currentAtBat = [];
         }
       });
 
-      // 現在進行中の打席があれば追加
-      if (currentAtBatPitches.length > 0) {
-        atBats.push(this._formatAtBat(currentAtBatPitches, atBats.length + 1));
+      if (currentAtBat.length > 0) {
+        batterPitches.push([...currentAtBat]);
       }
+
+      // 各打席のビジュアル整形
+      const atBats = batterPitches.map((pitches, abIdx) => this._formatAtBat(pitches, abIdx + 1));
 
       return {
         order: orderNum,
@@ -229,48 +255,63 @@ export class CatcherVisualBoard {
   _formatAtBat(pitches, atBatNum) {
     if (!pitches || pitches.length === 0) return null;
 
-    const lastPitch = pitches[pitches.length - 1];
-    const inning = lastPitch.inning || 1;
-    const resultText = lastPitch.resultText || lastPitch.actionName || '完了';
+    const last = pitches[pitches.length - 1];
+    const snap = last.snapshot;
+    const ev = last.pitchEvent;
 
-    // 打球タイプ判定
-    let resultType = 'out';
-    if (resultText.includes('安') || resultText.includes('打') || lastPitch.result === 'hit') {
-      resultType = (resultText.includes('本') || resultText.includes('2') || resultText.includes('3')) ? 'extra' : 'single';
-    } else if (resultText.includes('振') || lastPitch.result === 'strikeout') {
-      resultType = 'so';
+    const inning = snap ? snap.inning : 1;
+    let resultText = ev.result || "完了";
+    let resultType = "out";
+
+    // 打球結果の解析
+    if (resultText.startsWith("打球")) {
+      const playType = ev.play ? ev.play.type : resultText;
+      if (playType.includes("本") || playType.includes("二") || playType.includes("三")) {
+        resultType = "extra";
+      } else if (playType.includes("単打") || playType.includes("安")) {
+        resultType = "single";
+      } else {
+        resultType = "out";
+      }
+      resultText = playType;
+    } else if (resultText.includes("三振") || ((ev.result === "空振り" || ev.result.includes("ストライク")) && snap.strikes === 2)) {
+      resultType = "so";
+      resultText = ev.result === "空振り" ? "空三振" : "見三振";
+    } else if (resultText === "ボール" && snap.balls === 3) {
+      resultType = "walk";
+      resultText = "四球";
+    } else if (resultText === "死球") {
+      resultType = "walk";
+      resultText = "死球";
     }
 
-    // 打球ベクトル（スプレー）データ
-    const spray = lastPitch.sprayLocation ? {
-      angle: lastPitch.sprayLocation.angle || 0,
-      dist: lastPitch.sprayLocation.dist || 50,
-      type: resultType
-    } : null;
-
     // 投球ドット配列の生成
-    const formattedPitches = pitches.map((p, idx) => {
+    const formattedPitches = pitches.map((item, idx) => {
+      const p = item.pitchEvent;
       const pNum = idx + 1;
-      let pType = 'ball';
-      if (p.result === 'strike' || p.actionName?.includes('ストライク')) pType = 'looking';
-      if (p.actionName?.includes('空振')) pType = 'swing';
-      if (p.actionName?.includes('ファウル')) pType = 'foul';
-      if (idx === pitches.length - 1 && (resultType === 'single' || resultType === 'extra' || resultType === 'out')) {
-        pType = 'inplay';
-      }
+      let pType = "ball";
 
-      // 座標（記録がない場合はデフォルト安全値）
-      const x = p.pitchLocation ? p.pitchLocation.x * 100 : 50;
-      const y = p.pitchLocation ? p.pitchLocation.y * 100 : 50;
+      if (p.result === "ボール") pType = "ball";
+      else if (p.result === "見逃しストライク") pType = "looking";
+      else if (p.result === "空振り") pType = "swing";
+      else if (p.result === "ファウル") pType = "foul";
+      else if (p.result.startsWith("打球")) pType = "inplay";
+
+      // コース座標のマッピング（コース名から自然な位置を推測、または安全なデフォルト）
+      const coords = this._getCourseCoordinates(p.course);
 
       return {
         num: pNum,
         type: pType,
-        x: x,
-        y: y,
-        desc: `${pNum}球目・${p.actionName || pType}`
+        x: coords.x,
+        y: coords.y,
+        courseName: p.course || "未指定",
+        desc: `${pNum}球目・${p.result} (${p.course || "コース未指定"})`
       };
     });
+
+    // スプレー（打球方向）の推測または保持データ
+    const spray = this._getSprayForPlay(ev, resultType);
 
     return {
       inning: inning,
@@ -284,35 +325,77 @@ export class CatcherVisualBoard {
   }
 
   /**
+   * コース名からパーセンテージ座標 (0-100) を算出
+   */
+  _getCourseCoordinates(courseName) {
+    if (!courseName) return { x: 50, y: 50 };
+
+    const map = {
+      "高内": { x: 26, y: 26 }, "高中": { x: 50, y: 26 }, "高外": { x: 74, y: 26 },
+      "中内": { x: 26, y: 50 }, "中央": { x: 50, y: 50 }, "中外": { x: 74, y: 50 },
+      "低内": { x: 26, y: 74 }, "低中": { x: 50, y: 74 }, "低外": { x: 74, y: 74 },
+      "左高内": { x: 12, y: 15 }, "右高外": { x: 88, y: 15 },
+      "左低内": { x: 12, y: 85 }, "右低外": { x: 88, y: 85 },
+      "ワンバウンド": { x: 50, y: 92 }, "抜け球": { x: 50, y: 8 }
+    };
+
+    return map[courseName] || { x: 50, y: 50 };
+  }
+
+  /**
+   * 打球結果からスプレーベクトルを生成
+   */
+  _getSprayForPlay(pitchEvent, resultType) {
+    if (!pitchEvent.result.startsWith("打球") && !pitchEvent.play) return null;
+
+    const playType = pitchEvent.play ? pitchEvent.play.type : pitchEvent.result;
+    let angle = 0;
+    let dist = 55;
+
+    if (playType.includes("二") || playType.includes("右")) angle = 30;
+    else if (playType.includes("遊") || playType.includes("左") || playType.includes("三")) angle = -30;
+    else angle = 0;
+
+    if (resultType === "extra") dist = 85;
+    else if (resultType === "single") dist = 60;
+    else dist = 35;
+
+    return {
+      angle: angle,
+      dist: dist,
+      type: resultType
+    };
+  }
+
+  /**
    * ミニ・ストライクゾーンSVGの描画
    */
   _createMiniZoneSvg(atBat, isHighlighted) {
-    const w = 72;
-    const h = 72;
+    const w = 72, h = 72;
     const zX = 18, zY = 14, zW = 36, zH = 40;
 
-    const dotsSvg = atBat.pitches.map(p => {
+    const dotsSvg = atBat.pitches.map((p) => {
       const cx = 8 + (p.x / 100) * 56;
       const cy = 6 + (p.y / 100) * 56;
 
-      let fill = '#3b82f6'; // ボール (青)
-      let stroke = '#1e3a8a';
-      if (p.type === 'inplay') { fill = '#22c55e'; stroke = '#ffffff'; } // 打球 (緑)
-      else if (p.type === 'swing' || p.type === 'looking') { fill = '#ef4444'; stroke = '#7f1d1d'; } // ストライク (赤)
-      else if (p.type === 'foul') { fill = '#eab308'; stroke = '#713f12'; } // ファウル (黄)
+      let fill = "#3b82f6";
+      let stroke = "#1e3a8a";
+      if (p.type === "inplay") { fill = "#22c55e"; stroke = "#ffffff"; }
+      else if (p.type === "swing" || p.type === "looking") { fill = "#ef4444"; stroke = "#7f1d1d"; }
+      else if (p.type === "foul") { fill = "#eab308"; stroke = "#713f12"; }
 
-      const isBig = (p.type === 'inplay');
-      const r = isBig ? 7 : 5.5;
+      const isBig = (p.type === "inplay");
+      const r = isBig ? 6.5 : 5;
 
       return `
         <g>
-          <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${isBig ? '1.5' : '1'}" />
-          <text x="${cx.toFixed(1)}" y="${(cy + 3).toFixed(1)}" font-size="${isBig ? '8' : '7'}" font-weight="900" font-family="monospace" fill="${(p.type === 'inplay' || p.type === 'foul') ? '#0f172a' : '#ffffff'}" text-anchor="middle">
+          <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${isBig ? "1.5" : "1"}" />
+          <text x="${cx.toFixed(1)}" y="${(cy + 3).toFixed(1)}" font-size="${isBig ? "8" : "7"}" font-weight="900" font-family="monospace" fill="${(p.type === "inplay" || p.type === "foul") ? "#0f172a" : "#ffffff"}" text-anchor="middle">
             ${p.num}
           </text>
         </g>
       `;
-    }).join('');
+    }).join("");
 
     return `
       <svg viewBox="0 0 ${w} ${h}" class="w-16 h-16 shrink-0" xmlns="http://www.w3.org/2000/svg">
@@ -328,10 +411,8 @@ export class CatcherVisualBoard {
    * ミニ・打球グラウンド（スプレー）SVGの描画
    */
   _createMiniSpraySvg(atBat, isHighlighted) {
-    const w = 72;
-    const h = 72;
-    const hX = 36;
-    const hY = 62;
+    const w = 72, h = 72;
+    const hX = 36, hY = 62;
 
     if (!atBat.spray) {
       return `
@@ -349,18 +430,18 @@ export class CatcherVisualBoard {
     const tX = hX + Math.cos(rad) * reach;
     const tY = hY + Math.sin(rad) * reach;
 
-    let lineColor = '#94a3b8';
-    let targetColor = '#e2e8f0';
-    if (spray.type === 'single') { lineColor = '#22c55e'; targetColor = '#4ade80'; }
-    else if (spray.type === 'extra') { lineColor = '#f43f5e'; targetColor = '#fb7185'; }
+    let lineColor = "#94a3b8";
+    let targetColor = "#e2e8f0";
+    if (spray.type === "single") { lineColor = "#22c55e"; targetColor = "#4ade80"; }
+    else if (spray.type === "extra") { lineColor = "#f43f5e"; targetColor = "#fb7185"; }
 
     return `
       <svg viewBox="0 0 ${w} ${h}" class="w-16 h-16 shrink-0" xmlns="http://www.w3.org/2000/svg">
         <rect x="2" y="2" width="${w-4}" height="${h-4}" rx="8" fill="rgba(15, 23, 42, 0.7)" stroke="#334155" stroke-width="1" />
         <path d="M 12,62 A 44,44 0 0,1 60,62 L 36,62 Z" fill="rgba(16, 185, 129, 0.12)" stroke="#1e293b" stroke-width="1" />
         <polygon points="36,62 44,53 36,44 28,53" fill="rgba(217, 119, 6, 0.2)" stroke="#78350f" stroke-width="1" />
-        <line x1="${hX}" y1="${hY}" x2="${tX.toFixed(1)}" y2="${tY.toFixed(1)}" stroke="${lineColor}" stroke-width="${spray.type !== 'out' ? '2.2' : '1.2'}" stroke-linecap="round" />
-        <circle cx="${tX.toFixed(1)}" cy="${tY.toFixed(1)}" r="${spray.type !== 'out' ? '4' : '3'}" fill="${targetColor}" stroke="#0f172a" stroke-width="1" />
+        <line x1="${hX}" y1="${hY}" x2="${tX.toFixed(1)}" y2="${tY.toFixed(1)}" stroke="${lineColor}" stroke-width="${spray.type !== "out" ? "2.2" : "1.2"}" stroke-linecap="round" />
+        <circle cx="${tX.toFixed(1)}" cy="${tY.toFixed(1)}" r="${spray.type !== "out" ? "4" : "3"}" fill="${targetColor}" stroke="#0f172a" stroke-width="1" />
         <circle cx="${hX}" cy="${hY}" r="2" fill="#cbd5e1" />
       </svg>
     `;
@@ -370,9 +451,9 @@ export class CatcherVisualBoard {
    * テーブル全体の再描画
    */
   render() {
-    const tbody = document.getElementById('cvb-table-rows');
+    const tbody = document.getElementById("cvb-table-rows");
     if (!tbody) return;
-    tbody.innerHTML = '';
+    tbody.innerHTML = "";
 
     const batters = this._extractOpponentAtBats();
 
@@ -387,13 +468,13 @@ export class CatcherVisualBoard {
       return;
     }
 
-    batters.forEach(batter => {
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-slate-800/30 transition';
+    batters.forEach((batter) => {
+      const tr = document.createElement("tr");
+      tr.className = "hover:bg-slate-800/30 transition";
 
       // 打者名
-      const nameTd = document.createElement('td');
-      nameTd.className = 'py-2 px-2 align-middle border-r border-slate-800/80';
+      const nameTd = document.createElement("td");
+      nameTd.className = "py-2 px-2 align-middle border-r border-slate-800/80";
       nameTd.innerHTML = `
         <div class="flex items-center gap-1.5">
           <span class="w-5 h-5 rounded-lg bg-slate-800 text-slate-300 font-extrabold text-xs flex items-center justify-center font-mono shrink-0">
@@ -410,8 +491,8 @@ export class CatcherVisualBoard {
       // 第1〜第3打席セル
       for (let i = 0; i < 3; i++) {
         const atBat = batter.atBats[i];
-        const td = document.createElement('td');
-        td.className = 'p-1.5 align-middle border-r border-slate-800/80';
+        const td = document.createElement("td");
+        td.className = "p-1.5 align-middle border-r border-slate-800/80";
 
         if (!atBat) {
           td.innerHTML = `
@@ -426,24 +507,24 @@ export class CatcherVisualBoard {
         // 着眼点フィルターの判定
         let isHighlighted = false;
         let isDimmed = false;
-        if (this.currentFocusEye === 'first') {
+        if (this.currentFocusEye === "first") {
           if (atBat.hitPitchIndex === 1) isHighlighted = true; else isDimmed = true;
-        } else if (this.currentFocusEye === 'hits') {
-          if (atBat.resultType !== 'out' && atBat.resultType !== 'so') isHighlighted = true; else isDimmed = true;
-        } else if (this.currentFocusEye === 'twostrikes') {
-          if (atBat.hitPitchIndex >= 3 && atBat.resultType !== 'out') isHighlighted = true; else isDimmed = true;
+        } else if (this.currentFocusEye === "hits") {
+          if (atBat.resultType !== "out" && atBat.resultType !== "so") isHighlighted = true; else isDimmed = true;
+        } else if (this.currentFocusEye === "twostrikes") {
+          if (atBat.hitPitchIndex >= 3 && atBat.resultType !== "out") isHighlighted = true; else isDimmed = true;
         }
 
-        let badgeBg = 'bg-slate-700 text-slate-300';
-        if (atBat.resultType === 'single') badgeBg = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
-        if (atBat.resultType === 'extra') badgeBg = 'bg-rose-500/25 text-rose-300 border border-rose-500/50';
-        if (atBat.resultType === 'so') badgeBg = 'bg-sky-500/20 text-sky-400 border border-sky-500/40';
+        let badgeBg = "bg-slate-700 text-slate-300";
+        if (atBat.resultType === "single") badgeBg = "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40";
+        if (atBat.resultType === "extra") badgeBg = "bg-rose-500/25 text-rose-300 border border-rose-500/50";
+        if (atBat.resultType === "so") badgeBg = "bg-sky-500/20 text-sky-400 border border-sky-500/40";
 
         const zoneSvg = this._createMiniZoneSvg(atBat, isHighlighted);
         const spraySvg = this._createMiniSpraySvg(atBat, isHighlighted);
 
-        const card = document.createElement('div');
-        card.className = `p-1.5 rounded-xl border transition cursor-pointer active:scale-95 flex flex-col justify-between ${isHighlighted ? 'border-sky-400 bg-sky-950/20 shadow-md' : 'border-slate-800 bg-slate-900/60'} ${isDimmed ? 'opacity-30 grayscale' : ''}`;
+        const card = document.createElement("div");
+        card.className = `p-1.5 rounded-xl border transition cursor-pointer active:scale-95 flex flex-col justify-between ${isHighlighted ? "border-sky-400 bg-sky-950/20 shadow-md" : "border-slate-800 bg-slate-900/60"} ${isDimmed ? "opacity-30 grayscale" : ""}`;
         card.innerHTML = `
           <div class="flex items-center justify-between pb-1 border-b border-slate-800/60">
             <span class="text-[9px] font-mono text-slate-400">${atBat.inning}回</span>
@@ -454,11 +535,11 @@ export class CatcherVisualBoard {
             ${spraySvg}
           </div>
           <div class="text-[8px] font-bold text-amber-300/80 text-center truncate">
-            ${atBat.hitPitchIndex ? atBat.hitPitchIndex + '球目を打球' : '打席終了'}
+            ${atBat.hitPitchIndex ? atBat.hitPitchIndex + "球目を打球" : "打席終了"}
           </div>
         `;
 
-        card.addEventListener('click', () => this._showDetail(batter, atBat));
+        card.addEventListener("click", () => this._showDetail(batter, atBat));
         td.appendChild(card);
         tr.appendChild(td);
       }
@@ -468,29 +549,29 @@ export class CatcherVisualBoard {
   }
 
   _showDetail(batter, atBat) {
-    const panel = document.getElementById('cvb-detail-panel');
+    const panel = document.getElementById("cvb-detail-panel");
     if (!panel) return;
 
-    document.getElementById('cvb-detail-player').innerText = `${batter.order}番 ${batter.name} (${batter.pos})`;
-    document.getElementById('cvb-detail-title').innerText = `第${atBat.atBatNum}打席 (${atBat.inning}回) ── 結果: ${atBat.result}`;
+    document.getElementById("cvb-detail-player").innerText = `${batter.order}番 ${batter.name} (${batter.pos})`;
+    document.getElementById("cvb-detail-title").innerText = `第${atBat.atBatNum}打席 (${atBat.inning}回) ── 結果: ${atBat.result}`;
 
-    document.getElementById('cvb-detail-zone').innerHTML = this._createMiniZoneSvg(atBat, false);
-    document.getElementById('cvb-detail-spray').innerHTML = this._createMiniSpraySvg(atBat, false);
+    document.getElementById("cvb-detail-zone").innerHTML = this._createMiniZoneSvg(atBat, false);
+    document.getElementById("cvb-detail-spray").innerHTML = this._createMiniSpraySvg(atBat, false);
 
-    const listEl = document.getElementById('cvb-detail-pitch-list');
-    listEl.innerHTML = atBat.pitches.map(p => `
+    const listEl = document.getElementById("cvb-detail-pitch-list");
+    listEl.innerHTML = atBat.pitches.map((p) => `
       <div class="flex items-center justify-between p-1 bg-slate-900 rounded border border-slate-800">
         <span class="font-bold text-slate-300">${p.desc}</span>
         <span class="text-[10px] text-slate-500">${p.type}</span>
       </div>
-    `).join('');
+    `).join("");
 
-    panel.classList.remove('hidden');
+    panel.classList.remove("hidden");
   }
 
   _hideDetail() {
-    const panel = document.getElementById('cvb-detail-panel');
-    if (panel) panel.classList.add('hidden');
+    const panel = document.getElementById("cvb-detail-panel");
+    if (panel) panel.classList.add("hidden");
   }
 
   setFocusEye(eyeKey) {
@@ -498,15 +579,15 @@ export class CatcherVisualBoard {
     const container = this.modalEl;
     if (!container) return;
 
-    container.querySelectorAll('.cvb-eye-btn').forEach(b => {
-      b.classList.remove('bg-sky-500', 'text-white', 'border-sky-400', 'shadow');
-      b.classList.add('bg-slate-800', 'text-slate-300', 'border-slate-700');
+    container.querySelectorAll(".cvb-eye-btn").forEach((b) => {
+      b.classList.remove("bg-sky-500", "text-white", "border-sky-400", "shadow");
+      b.classList.add("bg-slate-800", "text-slate-300", "border-slate-700");
     });
 
     const activeBtn = container.querySelector(`[data-eye="${eyeKey}"]`);
     if (activeBtn) {
-      activeBtn.classList.remove('bg-slate-800', 'text-slate-300', 'border-slate-700');
-      activeBtn.classList.add('bg-sky-500', 'text-white', 'border-sky-400', 'shadow');
+      activeBtn.classList.remove("bg-slate-800", "text-slate-300", "border-slate-700");
+      activeBtn.classList.add("bg-sky-500", "text-white", "border-sky-400", "shadow");
     }
 
     this.render();
@@ -514,7 +595,7 @@ export class CatcherVisualBoard {
 
   open() {
     if (!this.modalEl) this._injectModalContainer();
-    this.modalEl.classList.remove('hidden');
+    this.modalEl.classList.remove("hidden");
     this.isOpen = true;
     this._hideDetail();
     this.render();
@@ -522,7 +603,7 @@ export class CatcherVisualBoard {
 
   close() {
     if (!this.modalEl) return;
-    this.modalEl.classList.add('hidden');
+    this.modalEl.classList.add("hidden");
     this.isOpen = false;
   }
 }
