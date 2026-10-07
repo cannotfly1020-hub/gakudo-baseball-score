@@ -1,12 +1,13 @@
 /**
  * js/app.js
  * アプリ全体の司令塔
- * （完全非同期・ゼロ遅延レスポンス版 ＆ 過去試合アーカイブ・捕手ボード・Wake Lock・炎天下モード統合）
+ * （完全非同期・ゼロ遅延レスポンス版 ＆ 過去試合アーカイブ・捕手ボード・Wake Lock・炎天下モード・打球メタ刻印統合）
  * 
  * 機能強化:
  * - 【現場過酷環境対策】Screen Wake Lock API による画面自動スリープ完全抑止（復帰時自動再取得付き）
  * - 【熱暴走・直射日光防止】炎天下ペーパーホワイトモードのトグル制御 ＆ LocalStorage永続化
  * - 【小学生捕手機能】絵で見る捕手スコア盤（CatcherVisualBoard）の完全統合
+ * - 【データ整合性保証】打球処理（processPlayResult）時に打者情報・表裏メタを pitchEvent に二重刻印
  * - データベース保存（IndexedDB）を完全非同期デバウンス化し、タップ直後の画面描画を一切ブロックしない
  * - processPlayResult 内の snapshot を createSnapshot に統一
  */
@@ -517,9 +518,14 @@ class BaseballApp {
 
     this.gameState.resetCount();
 
+    // 【重要】捕手ボードや履歴修正で100%確実に参照できるよう打者情報・表裏メタを刻印
+    const currentBatterSnapshot = snapshot.currentBatter || {};
     const pitchEvent = {
       pitchNum: state.pitchCount,
       inningStr: `${snapshot.inning}回${snapshot.isTop ? "表" : "裏"}`,
+      isTop: snapshot.isTop,
+      batterOrder: currentBatterSnapshot.order,
+      batterName: currentBatterSnapshot.name,
       course: playResult.course,
       result: `打球 (${type})`,
       play: playResult,
