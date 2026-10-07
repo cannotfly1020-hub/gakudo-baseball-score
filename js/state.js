@@ -516,29 +516,55 @@ export class GameState {
   /**
    * 振り逃げ詳細処理（Uncaught Third Strike）
    * - 空振り・見逃し三振後の捕手後逸や送球エラーによる出塁・進塁
+   * - 直前に「空振り/見逃し」で加算されてしまったアウトを完全に取り消し、セーフとして出塁させる
    * @param {Object} options
    * @param {number} options.batterReachBase - 打者の到達塁 (1: 一塁, 2: 二塁, 3: 三塁)
    * @param {number} options.runsScored - このプレーで生還した走者の総得点
    */
   handleUncaughtThirdStrike(options = { batterReachBase: 1, runsScored: 0 }) {
-    const snapshot = this.createSnapshot();
-
-    // 投球数を加算
-    this.state.pitchCount += 1;
-    this.incrementCurrentPitcherCount();
-
     const reachBase = options.batterReachBase || 1;
     const runs = options.runsScored || 0;
+
+    // 直前のイベントが三振（空振り・見逃しストライクによる打席完了）だったか確認
+    const lastHistory = this.state.history.length > 0 ? this.state.history[this.state.history.length - 1] : null;
+    const wasStrikeoutJustNow = lastHistory && 
+      lastHistory.pitchEvent && 
+      (lastHistory.pitchEvent.result === "空振り" || lastHistory.pitchEvent.result === "見逃しストライク") &&
+      lastHistory.snapshot &&
+      (lastHistory.snapshot.strikes === 2);
+
+    if (wasStrikeoutJustNow) {
+      // パターンA: すでに「空振り」を押してアウトが付いてしまった直後の救済
+      // 直前の1球前の盤面スナップショットをベースに戻す
+      const previousSnapshot = lastHistory.snapshot;
+      
+      // 直前が3アウトチェンジだった場合のイニング復元
+      this.state.inning = previousSnapshot.inning;
+      this.state.isTop = previousSnapshot.isTop;
+      this.state.outs = previousSnapshot.outs; // 三振前のアウト数に戻す（アウトを増やさない！）
+      this.state.runners = { ...previousSnapshot.runners };
+      this.state.balls = 0;
+      this.state.strikes = 0;
+
+      // 履歴の直前レコードを取り消し
+      this.state.history.pop();
+    } else {
+      // パターンB: 空振りを押さず直接「振り逃げ」を押した場合
+      this.state.pitchCount += 1;
+      this.incrementCurrentPitcherCount();
+      this.resetCount();
+    }
+
+    const snapshot = this.createSnapshot();
 
     // 走者生還による得点加算
     if (runs > 0) {
       this.addRun(runs);
     }
 
-    // 打者の進塁塁を設定
+    // 打者走者の進塁と塁上走者の押し出し・進塁
     if (reachBase === 1) {
       if (this.state.runners[3] && runs === 0) {
-        // 得点指定が明示されていない場合の安全補正
         this.state.runners[3] = false;
         this.addRun(1);
       }
@@ -560,17 +586,16 @@ export class GameState {
       this.state.runners = { 1: false, 2: false, 3: true };
     }
 
-    // カウントリセット ＆ 次打者へ（アウトカウントは増やさない）
-    this.resetCount();
+    // アウトカウントは絶対に増やさず、次打者へ
     this.advanceBatter();
 
     const pitchEvent = {
       pitchNum: this.state.pitchCount,
       pitcherName: this.state.currentPitcher ? this.state.currentPitcher.name : "投手",
-      inningStr: `${snapshot.inning}回${snapshot.isTop ? "表" : "裏"}`,
+      inningStr: `${this.state.inning}回${this.state.isTop ? "表" : "裏"}`,
       course: null,
-      result: `振り逃げ (${reachBase}塁到達${runs > 0 ? `・${runs}得点` : ""})`,
-      bsoBefore: `${snapshot.balls}-${snapshot.strikes}-${snapshot.outs}`
+      result: `振り逃げ成立 (${reachBase}塁進塁${runs > 0 ? `・${runs}得点` : ""})`,
+      bsoBefore: `${snapshot.balls}-${snapshot.strikes}-${this.state.outs}`
     };
 
     this.state.history.push({ snapshot, pitchEvent });
