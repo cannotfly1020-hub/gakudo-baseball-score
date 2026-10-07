@@ -20,6 +20,7 @@ import { RosterViewComponent } from "./components/rosterView.js";
 import { ScoreSheetComponent } from "./components/scoreSheet.js";
 import { GameArchiveModalComponent } from "./components/gameArchiveModal.js";
 import { CatcherVisualBoard } from "./components/catcherVisualBoard.js";
+import { PitchEditModalComponent } from "./components/pitchEditModal.js";
 import { dbStorage } from "./storage/indexedDb.js";
 import { DataExporter } from "./storage/exporter.js";
 
@@ -34,6 +35,7 @@ class BaseballApp {
     this.scoreSheetComponent = null;
     this.gameArchiveModalComponent = null;
     this.catcherVisualBoardComponent = null;
+    this.pitchEditModalComponent = null;
     this.saveTimer = null;
 
     // Screen Wake Lock インスタンス保持
@@ -82,8 +84,21 @@ class BaseballApp {
       this.scoreboardComponent = new ScoreboardComponent(scoreboardSlot, this.gameState);
     }
 
+    // 投球履歴ピンポイント修正モーダルの初期化
+    try {
+      this.pitchEditModalComponent = new PitchEditModalComponent(this.gameState);
+    } catch (err) {
+      console.error("PitchEditModalComponent 初期化エラー:", err);
+    }
+
     if (diamondSlot) {
-      this.runnerDiamondComponent = new RunnerDiamondComponent(diamondSlot, this.gameState);
+      this.runnerDiamondComponent = new RunnerDiamondComponent(diamondSlot, this.gameState, {
+        onEditPitch: (targetIndex) => {
+          if (this.pitchEditModalComponent) {
+            this.pitchEditModalComponent.open(targetIndex);
+          }
+        }
+      });
     }
 
     if (sprayModalSlot) {
