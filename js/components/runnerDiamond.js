@@ -507,27 +507,61 @@ export class RunnerDiamondComponent {
       ? state.currentPitcher.name
       : "投手";
 
-    // 直近5件を逆順（最新が上）で表示
-    const recent = state.history.slice(-5).reverse();
+    // 直近5件を逆順（最新が上）で表示（元の配列インデックスを保持）
+    const totalCount = state.history.length;
+    const recent = state.history
+      .map((item, originalIdx) => ({ item, originalIdx }))
+      .slice(-5)
+      .reverse();
+
     this.logContainer.innerHTML = `
       <div class="flex items-center justify-between border-b border-slate-800 pb-1 mb-1.5">
-        <span class="text-slate-400 font-bold text-[11px]">📋 直近の投球ログ</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-slate-400 font-bold text-[11px]">📋 直近の投球ログ</span>
+          <button type="button" id="btn-quick-open-pitch-edit" class="text-[9px] bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-1.5 py-0.5 rounded font-black border border-amber-400/40 transition active:scale-95" title="過去履歴ピンポイント修正を開く">
+            ✏️ 修正
+          </button>
+        </div>
         <span class="text-emerald-400 text-[10px] font-bold font-mono">${pitcherName}: ${pitcherCount}球</span>
       </div>
       <div class="space-y-1">
-        ${recent.map((item, idx) => {
-          const p = item.pitchEvent;
+        ${recent.map(({ item, originalIdx }, idx) => {
+          const p = item.pitchEvent || {};
           return `
-            <div class="flex items-center justify-between text-[11px] py-0.5 px-1.5 rounded ${idx === 0 ? "bg-slate-800/80 text-white font-bold" : "text-slate-300"}">
-              <span class="text-slate-400 text-[10px] w-12">${p.inningStr}</span>
+            <div class="pitch-log-row flex items-center justify-between text-[11px] py-1 px-1.5 rounded transition cursor-pointer active:scale-98 ${idx === 0 ? "bg-slate-800/80 text-white font-bold hover:bg-slate-700/80" : "text-slate-300 hover:bg-slate-800/50"}" data-history-index="${originalIdx}" title="タップしてこの1球を修正">
+              <div class="flex items-center gap-1">
+                <span class="text-[9px] text-amber-400/90 font-mono">#${p.pitchNum || (originalIdx + 1)}</span>
+                <span class="text-slate-400 text-[10px] w-10 truncate">${p.inningStr || "-"}</span>
+              </div>
               <span class="text-amber-300 font-bold">${p.course || "-"}</span>
-              <span class="text-slate-200">${p.result}</span>
-              <span class="text-[10px] text-slate-400">BSO: ${p.bsoBefore}</span>
+              <span class="text-slate-200 truncate max-w-[90px] sm:max-w-[130px]">${p.result || "未判定"}</span>
+              <span class="text-[10px] text-slate-400 font-mono">BSO:${p.bsoBefore || "0-0-0"}</span>
             </div>
           `;
         }).join("")}
       </div>
     `;
+
+    // ログ行タップイベントの紐付け
+    this.logContainer.querySelectorAll(".pitch-log-row").forEach((row) => {
+      row.addEventListener("click", () => {
+        const histIdx = parseInt(row.getAttribute("data-history-index"), 10);
+        if (typeof this.options.onEditPitch === "function") {
+          this.options.onEditPitch(histIdx);
+        }
+      });
+    });
+
+    // 「✏️ 修正」クイックボタンの紐付け
+    const quickBtn = this.logContainer.querySelector("#btn-quick-open-pitch-edit");
+    if (quickBtn) {
+      quickBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (typeof this.options.onEditPitch === "function") {
+          this.options.onEditPitch(null); // 指定なしで開く
+        }
+      });
+    }
   }
 
   recordRunnerAction(description, updateFn) {
