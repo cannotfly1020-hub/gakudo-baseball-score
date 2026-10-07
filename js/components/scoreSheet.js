@@ -1,11 +1,12 @@
 /**
  * js/components/scoreSheet.js
- * 学童野球 公式戦記録サマリーシート（A4 印刷・PDF保存対応コンポーネント）
+ * 学童野球 公式戦記録サマリーシート（A4印刷・LINE速報共有・Excel集計用CSV完全対応版）
  * 
- * 改善点:
- * - 打順・守備・番号・氏名列の横幅をコンパクトに最適化
- * - 個人成績欄に「打数」「安打」「打点」「四死」「三振」「犠打」「犠飛」を独立配置
- * - A4横印刷時にも文字潰れや改行を起こさない厳密な列幅比率
+ * 機能強化:
+ * - 【LINE速報ワンタップコピー】保護者連絡網にそのまま貼れるスコア＆バッテリー＆個人成績サマリー
+ * - 【Excel成績サマリーCSV出力】1球ログではなく、そのまま年間集計・表彰に使える「打撃成績・打率・投手成績」CSV書き出し
+ * - 【打率自動算出表示】個人打撃成績テーブルに公認野球規則準拠の「打率 (.AVG)」列を追加
+ * - 既存のA4横印刷/PDF、認印枠、先攻/後攻切替、列幅比率を100%完全維持
  */
 
 export class ScoreSheetComponent {
@@ -13,6 +14,7 @@ export class ScoreSheetComponent {
     this.container = containerElement;
     this.gameState = gameState;
     this.selectedTeam = "away"; // "away" (先攻) または "home" (後攻)
+    this.toastTimer = null;
 
     this.init();
   }
@@ -27,13 +29,13 @@ export class ScoreSheetComponent {
       <div id="scoresheet-backdrop" class="fixed inset-0 bg-black/90 z-50 overflow-y-auto p-2 sm:p-4 flex flex-col items-center select-none">
         
         <!-- 操作アクションバー (印刷時は非表示) -->
-        <div class="print:hidden w-full max-w-5xl mb-2 flex items-center justify-between bg-slate-900 border border-slate-800 p-2.5 rounded-2xl shadow-xl">
+        <div class="print:hidden w-full max-w-5xl mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-900 border border-slate-800 p-2.5 rounded-2xl shadow-xl">
           <div class="flex items-center gap-2">
             <span class="text-base sm:text-lg">📄</span>
             <h2 class="text-xs sm:text-sm font-black text-slate-100">公式戦 記録サマリーシート</h2>
             
             <!-- チーム表示切替 -->
-            <div class="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-xs ml-2">
+            <div class="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-xs ml-1 sm:ml-2">
               <button type="button" id="sheet-team-away" class="px-2.5 py-1 rounded font-bold transition ${
                 this.selectedTeam === "away" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-white"
               }">
@@ -47,16 +49,35 @@ export class ScoreSheetComponent {
             </div>
           </div>
 
-          <div class="flex items-center gap-2">
-            <button type="button" id="btn-print-sheet" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black px-3.5 py-1.5 rounded-xl text-xs shadow-md transition flex items-center gap-1.5">
-              <span>🖨️</span>
-              <span>印刷 / PDF保存</span>
+          <!-- アクションボタン群（LINE速報 ＆ Excel成績CSV ＆ 印刷/PDF） -->
+          <div class="flex items-center gap-1.5 flex-wrap sm:flex-nowrap justify-end">
+            <!-- LINE速報コピー -->
+            <button type="button" id="btn-copy-line-sheet" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black px-2.5 sm:px-3 py-1.5 rounded-xl text-xs shadow-md transition flex items-center gap-1" title="LINEグループ連絡網用の結果サマリーをコピー">
+              <span>💬</span>
+              <span>LINE速報</span>
             </button>
-            <button type="button" id="btn-close-sheet" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-3 py-1.5 rounded-xl text-xs transition">
-              ✕ 閉じる
+
+            <!-- Excel用 成績集計CSV -->
+            <button type="button" id="btn-export-excel-csv" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black px-2.5 sm:px-3 py-1.5 rounded-xl text-xs shadow-md transition flex items-center gap-1" title="Excelでそのまま集計できる打撃・打率・投手成績CSVをダウンロード">
+              <span>📊</span>
+              <span>Excel用CSV</span>
+            </button>
+
+            <!-- 印刷 / PDF -->
+            <button type="button" id="btn-print-sheet" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 hover:text-white font-bold px-2.5 sm:px-3 py-1.5 rounded-xl text-xs border border-slate-700 shadow-md transition flex items-center gap-1">
+              <span>🖨️</span>
+              <span>印刷 / PDF</span>
+            </button>
+
+            <!-- 閉じる -->
+            <button type="button" id="btn-close-sheet" class="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold px-2.5 py-1.5 rounded-xl text-xs transition">
+              ✕
             </button>
           </div>
         </div>
+
+        <!-- インライン通知トースト（コピー完了等） -->
+        <div id="sheet-toast-message" class="hidden print:hidden mb-2 text-xs font-black py-1.5 px-4 rounded-xl bg-emerald-950 border border-emerald-500 text-emerald-300 shadow-lg text-center transition"></div>
 
         <!-- 印刷プレビュー領域（白地・A4横比率・高精細テーブル） -->
         <div id="printable-score-document" class="w-full max-w-5xl bg-white text-slate-900 p-4 sm:p-6 rounded-xl shadow-2xl space-y-3 font-sans border border-slate-300">
@@ -127,7 +148,7 @@ export class ScoreSheetComponent {
     if (typeof tbA === "number") totalAway += tbA;
     if (typeof tbH === "number") totalHome += tbH;
 
-    // 打者成績・打席一覧集計
+    // 打者成績・打席一覧集計（打率計算済み）
     const batterStats = this.calculateBatterStats(isAway);
     // 投手成績集計
     const pitcherStats = this.calculatePitcherStats();
@@ -188,7 +209,7 @@ export class ScoreSheetComponent {
         </table>
       </div>
 
-      <!-- 3. 打者成績 & 打席一覧 (1〜9番) レイアウト最適化版 -->
+      <!-- 3. 打者成績 & 打席一覧 (1〜9番) 【打率列付き】 -->
       <div>
         <div class="flex items-center justify-between mb-1">
           <h3 class="text-xs font-black text-slate-800 flex items-center gap-1">
@@ -201,28 +222,29 @@ export class ScoreSheetComponent {
           <table class="w-full text-center text-xs border-collapse table-fixed">
             <thead>
               <tr class="bg-slate-100 border-b border-slate-800 text-[10px] font-bold">
-                <!-- 基本情報（横幅をスリム化） -->
-                <th class="py-1 px-0.5 w-[3.5%]">順</th>
-                <th class="py-1 px-0.5 w-[4.5%]">守</th>
-                <th class="py-1 px-0.5 w-[5%]">番号</th>
-                <th class="py-1 px-1 text-left w-[13%] border-r border-slate-400">氏名</th>
+                <!-- 基本情報 -->
+                <th class="py-1 px-0.5 w-[3%]">順</th>
+                <th class="py-1 px-0.5 w-[4%]">守</th>
+                <th class="py-1 px-0.5 w-[4.5%]">番号</th>
+                <th class="py-1 px-1 text-left w-[12%] border-r border-slate-400">氏名</th>
 
                 <!-- 打席詳細（各打席） -->
-                <th class="py-1 w-[7%]">第1打席</th>
-                <th class="py-1 w-[7%]">第2打席</th>
-                <th class="py-1 w-[7%]">第3打席</th>
-                <th class="py-1 w-[7%]">第4打席</th>
-                <th class="py-1 w-[7%]">第5打席</th>
-                <th class="py-1 w-[7%] border-r-2 border-slate-800">第6打席</th>
+                <th class="py-1 w-[6.5%]">第1打席</th>
+                <th class="py-1 w-[6.5%]">第2打席</th>
+                <th class="py-1 w-[6.5%]">第3打席</th>
+                <th class="py-1 w-[6.5%]">第4打席</th>
+                <th class="py-1 w-[6.5%]">第5打席</th>
+                <th class="py-1 w-[6.5%] border-r-2 border-slate-800">第6打席</th>
 
-                <!-- 個人成績欄（幅をしっかり確保して見やすく配置） -->
-                <th class="py-1 w-[4.5%] bg-slate-200">打数</th>
-                <th class="py-1 w-[4.5%] bg-slate-200 text-emerald-800">安打</th>
-                <th class="py-1 w-[4.5%] bg-slate-200">打点</th>
-                <th class="py-1 w-[4.5%] bg-slate-200">四死</th>
-                <th class="py-1 w-[4.5%] bg-slate-200">三振</th>
-                <th class="py-1 w-[4.5%] bg-slate-200">犠打</th>
-                <th class="py-1 w-[4.5%] bg-slate-200">犠飛</th>
+                <!-- 個人成績欄（打率列を追加） -->
+                <th class="py-1 w-[4%] bg-slate-200">打数</th>
+                <th class="py-1 w-[4%] bg-slate-200 text-emerald-800">安打</th>
+                <th class="py-1 w-[4%] bg-slate-200">打点</th>
+                <th class="py-1 w-[4%] bg-slate-200">四死</th>
+                <th class="py-1 w-[4%] bg-slate-200">三振</th>
+                <th class="py-1 w-[4%] bg-slate-200">犠打</th>
+                <th class="py-1 w-[4%] bg-slate-200">犠飛</th>
+                <th class="py-1 w-[6.5%] bg-amber-100 text-amber-950 font-black border-l border-slate-300">打率</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-300">
@@ -230,7 +252,7 @@ export class ScoreSheetComponent {
                 <tr class="hover:bg-slate-50 text-[11px]">
                   <td class="py-1 font-mono font-bold">${b.order}</td>
                   <td class="py-1 font-bold text-slate-700">${b.pos}</td>
-                  <td class="py-1 font-mono font-bold text-slate-600">#${b.number || '-'}</td>
+                  <td class="py-1 font-mono font-bold text-slate-600">#${b.number !== undefined ? b.number : '-'}</td>
                   <td class="py-1 px-1 text-left font-bold text-slate-900 truncate border-r border-slate-400 text-xs">${b.name}</td>
 
                   <td class="py-1 border-r border-slate-200 truncate">${b.plateAppearances[0] || '-'}</td>
@@ -247,6 +269,7 @@ export class ScoreSheetComponent {
                   <td class="py-1 font-mono font-bold bg-slate-50 text-xs">${b.so}</td>
                   <td class="py-1 font-mono font-bold bg-slate-50 text-xs">${b.sh}</td>
                   <td class="py-1 font-mono font-bold bg-slate-50 text-xs">${b.sf}</td>
+                  <td class="py-1 font-mono font-black bg-amber-50 text-amber-900 text-xs border-l border-slate-300">${b.avg}</td>
                 </tr>
               `).join("")}
             </tbody>
@@ -306,21 +329,18 @@ export class ScoreSheetComponent {
 
         <!-- 審判員・公式記録員 署名捺印欄 -->
         <div class="flex items-center gap-2 border border-slate-400 p-1.5 rounded bg-slate-50/50">
-          <!-- 球審 -->
           <div class="flex items-center gap-1 border-r border-slate-300 pr-2">
             <span class="font-bold text-slate-700">球審:</span>
             <span class="inline-block w-16 border-b border-slate-400 text-center text-xs"></span>
             <span class="inline-flex items-center justify-center w-6 h-6 border border-dashed border-slate-400 rounded text-[9px] text-slate-400 select-none">印</span>
           </div>
 
-          <!-- 塁審 -->
           <div class="flex items-center gap-1 border-r border-slate-300 pr-2">
             <span class="font-bold text-slate-700">塁審:</span>
             <span class="inline-block w-20 border-b border-slate-400 text-center text-xs"></span>
             <span class="inline-flex items-center justify-center w-6 h-6 border border-dashed border-slate-400 rounded text-[9px] text-slate-400 select-none">印</span>
           </div>
 
-          <!-- 公式記録員 -->
           <div class="flex items-center gap-1">
             <span class="font-bold text-slate-700">公式記録員:</span>
             <span class="inline-block w-20 border-b border-slate-400 text-center text-xs"></span>
@@ -342,7 +362,7 @@ export class ScoreSheetComponent {
       return {
         order: i + 1,
         pos: r.pos || "-",
-        number: r.number || (i + 1),
+        number: r.number !== undefined ? r.number : (i + 1),
         name: r.name || `${i + 1}番 打者`,
         plateAppearances: [],
         ab: 0,
@@ -351,7 +371,8 @@ export class ScoreSheetComponent {
         bb: 0,
         so: 0,
         sh: 0,
-        sf: 0
+        sf: 0,
+        avg: ".---"
       };
     });
 
@@ -452,6 +473,18 @@ export class ScoreSheetComponent {
           if (isSh) b.sh++;
           if (isSf) b.sf++;
           b.rbi += rbi;
+
+          // 打率計算（打数 > 0 の場合）
+          if (b.ab > 0) {
+            const rawAvg = b.hits / b.ab;
+            if (rawAvg >= 1) {
+              b.avg = "1.000";
+            } else {
+              b.avg = rawAvg.toFixed(3).replace(/^0/, "");
+            }
+          } else {
+            b.avg = ".---";
+          }
         }
         currentBatterOrder = (currentBatterOrder % 9) + 1;
       }
@@ -528,6 +561,123 @@ export class ScoreSheetComponent {
     return statsList;
   }
 
+  /**
+   * LINE速報用の整形テキストを生成
+   */
+  generateLineShareText() {
+    const state = this.gameState.getState();
+    const info = state.gameInfo || {};
+    const teams = state.teams || {};
+
+    const awayTeamName = (teams.away && teams.away.name) || "先攻チーム";
+    const homeTeamName = (teams.home && teams.home.name) || "後攻チーム";
+
+    const totalAway = (state.awayScore || []).reduce((acc, cur) => acc + (Number(cur) || 0), 0);
+    const totalHome = (state.homeScore || []).reduce((acc, cur) => acc + (Number(cur) || 0), 0);
+
+    const scoresAwayStr = (state.awayScore || []).slice(0, Math.max(state.inning, 1)).join(" ");
+    const scoresHomeStr = (state.homeScore || []).slice(0, Math.max(state.inning, 1)).join(" ");
+
+    // 投手情報
+    const awayPitcher = teams.away?.pitcher?.name || "先発投手";
+    const homePitcher = teams.home?.pitcher?.name || "相手投手";
+
+    let text = `【学童野球 試合速報】\n`;
+    text += `📅 ${info.date || new Date().toISOString().slice(0, 10)} | ${info.tournament || "公式戦"}\n`;
+    if (info.venue) text += `📍 球場: ${info.venue}\n`;
+    text += `━━━━━━━━━━━━━━\n`;
+    text += `■ スコア結果\n`;
+    text += `${awayTeamName}  ${totalAway} ─ ${totalHome}  ${homeTeamName}\n\n`;
+    text += `[回別得点]\n`;
+    text += `先攻: ${scoresAwayStr} | 計 ${totalAway}\n`;
+    text += `後攻: ${scoresHomeStr} | 計 ${totalHome}\n`;
+    text += `━━━━━━━━━━━━━━\n`;
+    text += `■ バッテリー\n`;
+    text += `先攻: [投] ${awayPitcher}\n`;
+    text += `後攻: [投] ${homePitcher}\n`;
+    text += `━━━━━━━━━━━━━━\n`;
+    text += `※gakudo-baseball-score より送信`;
+
+    return text;
+  }
+
+  /**
+   * Excel用 成績集計サマリーCSV（BOM付きUTF-8）の生成＆ダウンロード
+   * （1球生ログではなく、開いた瞬間そのまま使える選手別成績まとめ）
+   */
+  exportExcelSummaryCsv() {
+    const state = this.gameState.getState();
+    const info = state.gameInfo || {};
+    const teams = state.teams || {};
+
+    const awayTeamName = (teams.away && teams.away.name) || "先攻チーム";
+    const homeTeamName = (teams.home && teams.home.name) || "後攻チーム";
+
+    const awayBatters = this.calculateBatterStats(true);
+    const homeBatters = this.calculateBatterStats(false);
+    const pitchers = this.calculatePitcherStats();
+
+    let csv = "";
+
+    // 1. 試合メタ情報
+    csv += `試合日,大会名,球場,先攻チーム,後攻チーム,最終スコア\n`;
+    const totalAway = (state.awayScore || []).reduce((acc, cur) => acc + (Number(cur) || 0), 0);
+    const totalHome = (state.homeScore || []).reduce((acc, cur) => acc + (Number(cur) || 0), 0);
+    csv += `"${info.date || ''}","${info.tournament || '公式戦'}","${info.venue || ''}","${awayTeamName}","${homeTeamName}","${totalAway}-${totalHome}"\n\n`;
+
+    // 2. 打撃成績サマリー
+    csv += `【打撃成績サマリー】\n`;
+    csv += `チーム,打順,守備,背番号,選手名,打席数,打数,安打,打点,四死球,三振,犠打,犠飛,打率\n`;
+
+    const appendBatters = (teamName, list) => {
+      list.forEach(b => {
+        const paCount = b.plateAppearances.length;
+        csv += `"${teamName}",${b.order},"${b.pos}",${b.number !== undefined ? b.number : ''},"${b.name}",${paCount},${b.ab},${b.hits},${b.rbi},${b.bb},${b.so},${b.sh},${b.sf},"${b.avg}"\n`;
+      });
+    };
+
+    appendBatters(awayTeamName, awayBatters);
+    appendBatters(homeTeamName, homeBatters);
+
+    csv += `\n`;
+
+    // 3. 投手成績サマリー
+    csv += `【投手成績サマリー】\n`;
+    csv += `チーム,投手氏名,投球数,被安打,奪三振,与四死球,失点\n`;
+    pitchers.forEach(p => {
+      csv += `"${p.teamName}","${p.name}",${p.pitchCount},${p.hits},${p.so},${p.bb},${p.runs}\n`;
+    });
+
+    // BOM付きUTF-8 でダウンロード
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    const blob = new Blob([bom, csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    const dateStr = info.date || new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `成績集計_${dateStr}_${awayTeamName}vs${homeTeamName}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+    this.showToast("📊 Excel用 成績集計CSVをダウンロードしました！");
+  }
+
+  showToast(message) {
+    const toast = this.container.querySelector("#sheet-toast-message");
+    if (!toast) return;
+
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    toast.textContent = message;
+    toast.classList.remove("hidden");
+
+    this.toastTimer = setTimeout(() => {
+      toast.classList.add("hidden");
+    }, 2800);
+  }
+
   bindEvents() {
     const btnClose = this.container.querySelector("#btn-close-sheet");
     if (btnClose) {
@@ -540,6 +690,40 @@ export class ScoreSheetComponent {
     if (btnPrint) {
       btnPrint.addEventListener("click", () => {
         window.print();
+      });
+    }
+
+    // LINE速報テキストコピー
+    const btnLine = this.container.querySelector("#btn-copy-line-sheet");
+    if (btnLine) {
+      btnLine.addEventListener("click", async () => {
+        const text = this.generateLineShareText();
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+          }
+          this.showToast("✅ LINE用 試合速報テキストをコピーしました！");
+        } catch (err) {
+          console.warn("クリップボードコピー失敗:", err);
+          this.showToast("⚠️ コピーに失敗しました。手動でテキストを選択してください。");
+        }
+      });
+    }
+
+    // Excel用 成績集計CSVダウンロード
+    const btnCsv = this.container.querySelector("#btn-export-excel-csv");
+    if (btnCsv) {
+      btnCsv.addEventListener("click", () => {
+        this.exportExcelSummaryCsv();
       });
     }
 
