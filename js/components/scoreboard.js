@@ -1,12 +1,13 @@
 /**
  * js/components/scoreboard.js
- * スコアボード ＆ 球数・時間制限タイマーコンポーネント（列揃え完全固定版）
+ * スコアボード ＆ 球数・時間制限タイマーコンポーネント（列揃え完全固定版 ＆ 学童70球特例表示対応版）
  * 
  * 改善点:
  * - table-fixed による各列幅の完全均等・固定化（文字の揺らぎによるズレをゼロに）
  * - チーム名、イニング(1〜6)、TB、R/H/E の境界線とパディングの最適化
  * - 1回裏の得点が正確に「1」のマスに反映されるよう整合
  * - 現在の攻撃チームに対する得点クイック補正（＋ / −）ボタンの追加
+ * - 【ステップ3】学童公式戦70球制限「打席完了特例」ステータスバッジのリアルタイム連動
  */
 
 export class ScoreboardComponent {
@@ -100,6 +101,7 @@ export class ScoreboardComponent {
             </div>
           </div>
 
+          <!-- 球数メーター ＆ 【特例対応】ステータスバッジ -->
           <div class="flex items-center gap-1.5">
             <span id="pitcher-name-badge" class="text-[10px] text-slate-400 font-bold truncate max-w-[80px]">投手:</span>
             <div class="flex items-baseline gap-0.5 font-mono">
@@ -107,7 +109,7 @@ export class ScoreboardComponent {
               <span class="text-slate-500 text-xs">/</span>
               <span id="target-pitch-limit" class="text-xs text-slate-400">70</span>
             </div>
-            <span id="pitch-status-badge" class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+            <span id="pitch-status-badge" class="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-950 text-emerald-400 border border-emerald-800 shrink-0 text-center transition">
               順調
             </span>
           </div>
@@ -366,15 +368,39 @@ export class ScoreboardComponent {
 
     if (!badgeEl || !countEl) return;
 
+    // クラスの初期化
     countEl.classList.remove("text-amber-400", "text-rose-500");
-    badgeEl.className = "text-[9px] px-1.5 py-0.2 rounded font-bold";
 
+    // GameState の打席完了特例ステータスを優先取得
+    if (this.gameState && typeof this.gameState.getPitchLimitStatus === "function") {
+      const limitStatus = this.gameState.getPitchLimitStatus();
+      badgeEl.className = `text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 text-center transition ${limitStatus.badgeColor}`;
+
+      if (limitStatus.status === "at_bat_allowed") {
+        countEl.classList.add("text-amber-400");
+        badgeEl.textContent = "打席完了まで可";
+        badgeEl.title = `⚠️ ${limitStatus.limit}球到達（本打席完了まで投球可能）`;
+      } else if (limitStatus.status === "limit_reached") {
+        countEl.classList.add("text-rose-500");
+        badgeEl.textContent = "上限(交代)";
+        badgeEl.title = `🚨 ${limitStatus.limit}球上限到達（次打者から登板不可）`;
+      } else if (limitStatus.status === "warning") {
+        countEl.classList.add("text-amber-400");
+        badgeEl.textContent = limitStatus.message;
+      } else {
+        badgeEl.textContent = "順調";
+      }
+      return;
+    }
+
+    // フォールバック（通常算出）
+    badgeEl.className = "text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0";
     const remaining = state.pitchLimit - pitcherCount;
 
     if (remaining <= 0) {
       countEl.classList.add("text-rose-500");
       badgeEl.classList.add("bg-rose-950", "text-rose-400", "border", "border-rose-700");
-      badgeEl.textContent = "⚠️ 上限到達";
+      badgeEl.textContent = "上限到達";
     } else if (remaining <= 10) {
       countEl.classList.add("text-amber-400");
       badgeEl.classList.add("bg-amber-950", "text-amber-300", "border", "border-amber-700");
