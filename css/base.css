@@ -1,40 +1,30 @@
-/* ==========================================================================
+/* STREAMING_CHUNK:Defining root variables and theme palette /
+/ ==========================================================================
 Base CSS - gakudo-baseball-score
 天然芝・グラウンドを意識したダークテーマ、リセット、およびベースタイポグラフィ
-========================================================================== */
-
-:root {
-/* メインカラーパレット */
+========================================================================== */:root {
+/* メインカラーパレット (通常ダークモード) */
 --bg-primary: #070d1e;
 --bg-panel: #0f172a;
 --bg-subpanel: #1e293b;
 --border-color: #334155;
---border-focus: #38bdf8;
-
-/* アクセントカラー */
+--border-focus: #38bdf8;/* アクセントカラー */
 --turf-green: #059669;
 --turf-dark: #064e3b;
 --gold-accent: #f59e0b;
 --strike-yellow: #facc15;
 --ball-green: #22c55e;
---out-red: #ef4444;
-
-/* テキストカラー */
+--out-red: #ef4444;/* テキストカラー */
 --text-main: #f8fafc;
 --text-muted: #94a3b8;
---text-sub: #cbd5e1;
-
-/* トランジション */
+--text-sub: #cbd5e1;/* トランジション */
 --transition-fast: 0.15s ease-out;
-}
-
-/* ボックスサイジングとスクロール動作 */
+}/* STREAMING_CHUNK:Styling reset rules and body setup /
+/ ボックスサイジングとスクロール動作 */
 *, *::before, *::after {
 box-sizing: border-box;
 -webkit-tap-highlight-color: transparent;
-}
-
-html, body {
+}html, body {
 margin: 0;
 padding: 0;
 background-color: var(--bg-primary);
@@ -44,42 +34,95 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica N
 -moz-osx-font-smoothing: grayscale;
 touch-action: manipulation;
 overscroll-behavior-y: none;
-}
-
-/* スマホ実機でのテキスト選択・ズーム誤動作防止 */
+}/* スマホ実機でのテキスト選択・ズーム誤動作防止 */
 body {
 user-select: none;
 -webkit-user-select: none;
-}
-
-/* ボタンの基本タッチフィードバック */
+}/* STREAMING_CHUNK:Styling button feedback and scrollbars /
+/ ボタンの基本タッチフィードバック */
 button {
 cursor: pointer;
 border: none;
 outline: none;
 font-family: inherit;
 transition: transform var(--transition-fast), filter var(--transition-fast), background-color var(--transition-fast);
-}
-
-button:active {
+}button:active {
 transform: scale(0.97);
-}
-
-/* スクロールバーのカスタマイズ（ダーク調） */
+}/* スクロールバーのカスタマイズ（ダーク調） */
 ::-webkit-scrollbar {
 width: 6px;
 height: 6px;
-}
-
-::-webkit-scrollbar-track {
+}::-webkit-scrollbar-track {
 background: var(--bg-primary);
-}
-
-::-webkit-scrollbar-thumb {
+}::-webkit-scrollbar-thumb {
 background: var(--border-color);
 border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
+}::-webkit-scrollbar-thumb:hover {
 background: #475569;
+}/* STREAMING_CHUNK:Styling sunlight paper-white mode rules /
+/ ==========================================================================
+【炎天下ペーパーホワイトモード】 (Sunlight High-Contrast Mode)
+真夏の直射日光・気温35℃以上の河川敷グラウンド用。
+端末の発熱（ブラックアウト）を抑え、反射下でも極太黒字でくっきり読めるE-Ink調配色。
+========================================================================== */body.sunlight-mode {
+background-color: #ffffff !important;
+color: #000000 !important;
+}body.sunlight-mode header,
+body.sunlight-mode main,
+body.sunlight-mode section,
+body.sunlight-mode .bg-$$\#0b1329$$,
+body.sunlight-mode .bg-slate-900,
+body.sunlight-mode .bg-slate-950,
+body.sunlight-mode .bg-slate-900/80,
+body.sunlight-mode .bg-slate-900/90,
+body.sunlight-mode .bg-slate-900/95 {
+background-color: #ffffff !important;
+color: #000000 !important;
+border-color: #0f172a !important;
+}/* パネル・カードの白地＆高コントラスト枠線化 */
+body.sunlight-mode .bg-slate-800,
+body.sunlight-mode .bg-slate-800/90,
+body.sunlight-mode .bg-slate-800/70,
+body.sunlight-mode .bg-slate-800/30 {
+background-color: #f1f5f9 !important;
+color: #000000 !important;
+border-color: #334155 !important;
+}/* STREAMING_CHUNK:Refining text contrast for sunlight mode /
+/ テキストカラーの極太墨黒化 */
+body.sunlight-mode .text-slate-100,
+body.sunlight-mode .text-slate-200,
+body.sunlight-mode .text-slate-300,
+body.sunlight-mode .text-white {
+color: #000000 !important;
+font-weight: 800 !important;
+}body.sunlight-mode .text-slate-400,
+body.sunlight-mode .text-slate-500 {
+color: #334155 !important;
+font-weight: 700 !important;
+}/* 境界線・区切り線のくっきり強調 */
+body.sunlight-mode .border-slate-800,
+body.sunlight-mode .border-slate-700,
+body.sunlight-mode .border-slate-800/80,
+body.sunlight-mode .border-slate-800/60 {
+border-color: #0f172a !important;
+}/* STREAMING_CHUNK:Enhancing status badges and indicators under direct sunlight /
+/ 直射日光下でのカウント・ボタン視認性向上 */
+body.sunlight-mode .bg-emerald-400,
+body.sunlight-mode .text-emerald-400 {
+color: #047857 !important;
+}body.sunlight-mode .bg-amber-400,
+body.sunlight-mode .text-amber-400,
+body.sunlight-mode .text-amber-300 {
+color: #b45309 !important;
+}body.sunlight-mode .text-sky-400,
+body.sunlight-mode .text-sky-300 {
+color: #0369a1 !important;
+}body.sunlight-mode .text-rose-400,
+body.sunlight-mode .text-rose-300 {
+color: #be123c !important;
+}/* 炎天下モード時のスクロールバー */
+body.sunlight-mode::-webkit-scrollbar-track {
+background: #f8fafc;
+}body.sunlight-mode::-webkit-scrollbar-thumb {
+background: #64748b;
 }
