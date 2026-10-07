@@ -52,9 +52,10 @@ export class PitchEditModalComponent {
     if (!container) {
       container = document.createElement("div");
       container.id = "pitch-edit-modal-slot";
-      container.className = "hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm overflow-y-auto p-2 sm:p-4 flex items-center justify-center select-none";
       document.body.appendChild(container);
     }
+    // 既存スロットであっても確実に初期非表示・モーダルスタイルを強制適用
+    container.className = "hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm overflow-y-auto p-2 sm:p-4 flex items-center justify-center select-none";
     this.modalContainer = container;
   }
 
